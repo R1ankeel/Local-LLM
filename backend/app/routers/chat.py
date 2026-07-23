@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from app.clients.ollama import (
     OllamaModelNotFoundError,
     OllamaResponseError,
+    OllamaStreamEndedWithoutDoneError,
     OllamaTimeoutError,
     OllamaUnavailableError,
 )
@@ -19,6 +20,7 @@ from app.dependencies import get_current_user, utc_now
 from app.models.auth import User
 from app.models.chat import Chat, ChatTurnRequest, Message
 from app.routers.chats import _get_owned_chat, touch_chat_title
+from app.services.chat_summaries import SUMMARY_BATCH_SIZE, generate_context_summary
 from app.services.behavior_profiles import build_system_prompt, get_profile_for_chat
 
 
@@ -36,18 +38,75 @@ def _ordered_messages(db: Session, chat_id: int) -> list[dict]:
         .where(Message.chat_id == chat_id)
         .order_by(Message.created_at, Message.id)
     ).all()
-    return [{"role": row.role, "content": row.content} for row in rows if row.role in {"user", "assistant"}]
+    return [
+        {"role": row.role, "content": row.content}
+        for row in rows
+        if row.role in {"user", "assistant"} and row.is_complete
+    ]
+
+
+def _ordered_message_rows(db: Session, chat_id: int) -> list[Message]:
+    rows = db.exec(
+        select(Message)
+        .where(Message.chat_id == chat_id)
+        .order_by(Message.id)
+    ).all()
+    return [row for row in rows if row.role in {"user", "assistant"} and row.is_complete]
+
+
+def _complete_messages_after_cutoff(db: Session, chat: Chat) -> list[Message]:
+    messages = _ordered_message_rows(db, chat.id)
+    cutoff_id = chat.summary_through_message_id or 0
+    if cutoff_id > 0:
+        messages = [message for message in messages if (message.id or 0) > cutoff_id]
+    return messages
+
+
+def _raw_window_start(messages: list[Message], context_message_limit: int) -> int:
+    if context_message_limit <= 0:
+        return len(messages)
+    return max(0, len(messages) - context_message_limit)
 
 
 def _limited_messages(db: Session, chat: Chat) -> list[dict]:
-    messages = _ordered_messages(db, chat.id)
-    if chat.context_message_limit <= 0:
-        return []
-
-    selected = messages[-chat.context_message_limit :]
-    while selected and selected[0]["role"] == "assistant":
+    messages = _complete_messages_after_cutoff(db, chat)
+    raw_start = _raw_window_start(messages, chat.context_message_limit)
+    selected = messages[raw_start:]
+    while selected and selected[0].role == "assistant":
         selected = selected[1:]
-    return selected
+    return [{"role": row.role, "content": row.content} for row in selected]
+
+
+async def _maybe_update_chat_summary(
+    db: Session,
+    chat: Chat,
+    client,
+    model: str,
+) -> bool:
+    messages = _complete_messages_after_cutoff(db, chat)
+    raw_start = _raw_window_start(messages, chat.context_message_limit)
+    messages = messages[:raw_start]
+
+    if len(messages) < SUMMARY_BATCH_SIZE:
+        return False
+
+    batch = messages[:SUMMARY_BATCH_SIZE]
+    if batch[-1].role != "assistant":
+        return False
+
+    try:
+        summary_text = await generate_context_summary(client, model, chat.context_summary, batch)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to update chat summary for chat %s: %s", chat.id, exc)
+        return False
+
+    chat.context_summary = summary_text
+    chat.summary_through_message_id = batch[-1].id
+    chat.summary_updated_at = utc_now()
+    db.add(chat)
+    db.commit()
+    db.refresh(chat)
+    return True
 
 
 @router.post("/chat")
@@ -61,7 +120,6 @@ async def chat(
     client = request.app.state.ollama_client
     model_manager = request.app.state.model_manager
     profile = get_profile_for_chat(db, chat)
-    system_prompt = build_system_prompt(profile)
 
     async def stream():
         assistant_message: Message | None = None
@@ -71,10 +129,13 @@ async def chat(
             try:
                 await client.ensure_model_available(generation_model)
 
+                await _maybe_update_chat_summary(db, chat, client, generation_model)
+
                 user_message = Message(
                     chat_id=chat.id,
                     role="user",
                     content=payload.content,
+                    is_complete=True,
                 )
                 db.add(user_message)
                 touch_chat_title(chat, payload.content)
@@ -82,6 +143,7 @@ async def chat(
                 db.commit()
                 db.refresh(chat)
 
+                system_prompt = build_system_prompt(profile, chat.context_summary)
                 request_messages = [{"role": "system", "content": system_prompt}] + _limited_messages(db, chat)
                 think = payload.mode == "thinking"
 
@@ -96,6 +158,7 @@ async def chat(
                                 chat_id=chat.id,
                                 role="assistant",
                                 content=assistant_text,
+                                is_complete=False,
                             )
                             db.add(assistant_message)
                         else:
@@ -107,6 +170,10 @@ async def chat(
                         yield _ndjson_event({"type": "content", "content": chunk})
 
                     if not await request.is_disconnected():
+                        if assistant_message is not None:
+                            assistant_message.is_complete = True
+                            db.add(assistant_message)
+                            db.commit()
                         yield _ndjson_event({"type": "done"})
             except (OllamaUnavailableError, OllamaTimeoutError, OllamaResponseError) as exc:
                 logger.warning("Chat stream failed: %s", exc)
@@ -117,6 +184,10 @@ async def chat(
                     elif isinstance(exc, OllamaResponseError):
                         message = "Ollama вернула ошибочный ответ."
                     yield _ndjson_event({"type": "error", "message": message})
+            except OllamaStreamEndedWithoutDoneError as exc:
+                logger.warning("Chat stream ended before done=true: %s", exc)
+                if not await request.is_disconnected():
+                    yield _ndjson_event({"type": "error", "message": "Ollama ﾐｲﾐｵﾑﾐｽﾑσｻﾐｰ ﾐｾﾑ威ｸﾐｱﾐｾﾑ・ｽﾑ巾ｹ ﾐｾﾑひｲﾐｵﾑ・"})
             except OllamaModelNotFoundError as exc:
                 logger.warning("Active model is unavailable: %s", exc)
                 if not await request.is_disconnected():

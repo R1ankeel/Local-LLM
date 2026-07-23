@@ -41,6 +41,7 @@ class FakeOllamaClient:
         self.default_model = default_model
         self.available_models = [{"name": default_model}]
         self.lines = [json.dumps({"message": {"content": "ok"}, "done": True})]
+        self.response_queue: list[list[str]] = []
         self.delay = 0.0
         self.fail_stream = None
         self.captured_requests: list[dict] = []
@@ -65,9 +66,13 @@ class FakeOllamaClient:
         )
         if self.fail_stream is not None:
             raise self.fail_stream
-        yield FakeResponse(self.lines, self.delay)
+        lines = self.response_queue.pop(0) if self.response_queue else self.lines
+        yield FakeResponse(lines, self.delay)
 
     async def iter_content(self, response: FakeResponse):
+        from app.clients.ollama import OllamaStreamEndedWithoutDoneError
+
+        seen_done = False
         async for line in response.aiter_lines():
             if not line:
                 continue
@@ -76,7 +81,10 @@ class FakeOllamaClient:
             if content:
                 yield content
             if payload.get("done"):
+                seen_done = True
                 break
+        if not seen_done:
+            raise OllamaStreamEndedWithoutDoneError("Ollama stream ended before done=true.")
 
 
 class BackendHarness:
@@ -522,6 +530,12 @@ class Stage06Tests(unittest.TestCase):
         messages = self.harness.query_messages(chat["id"])
         self.assertEqual([message.role for message in messages], ["user", "assistant"])
         self.assertEqual(messages[-1].content, "hel")
+        self.assertFalse(messages[-1].is_complete)
+
+        chat_detail = client.get(f"/api/chats/{chat['id']}")
+        self.assertEqual(chat_detail.status_code, 200)
+        self.assertEqual(chat_detail.json()["messages"][-1]["content"], "hel")
+        self.assertFalse(chat_detail.json()["messages"][-1]["is_complete"])
 
         captured = fake_client.captured_requests[-1]
         self.assertEqual(captured["model"], "test-model")
@@ -547,6 +561,29 @@ class Stage06Tests(unittest.TestCase):
         fake_client.lines = [json.dumps({"message": {"content": "next"}, "done": True})]
         asyncio.run(self.harness.run_chat(alice.id, chat["id"], "After update"))
         self.assertIn("Switch to a calmer tone.", fake_client.captured_requests[-1]["messages"][0]["content"])
+
+    def test_stream_prompt_eof_without_done_keeps_partial_assistant_incomplete(self) -> None:
+        client = self.harness.client
+        assert client is not None
+
+        alice = self.harness.create_user("alice", "secret")
+        self.harness.login("alice", "secret")
+        chat = client.post("/api/chats", json={}).json()
+
+        fake_client = self.harness.main.app.state.ollama_client
+        fake_client.lines = [
+            json.dumps({"message": {"content": "hel"}, "done": False}),
+            json.dumps({"message": {"content": "lo"}}),
+        ]
+
+        body = asyncio.run(self.harness.run_chat(alice.id, chat["id"], "Hi there"))
+        self.assertIn('"type": "error"', body)
+        self.assertNotIn('"type": "done"', body)
+
+        messages = self.harness.query_messages(chat["id"])
+        self.assertEqual([message.role for message in messages], ["user", "assistant"])
+        self.assertEqual(messages[-1].content, "hello")
+        self.assertFalse(messages[-1].is_complete)
 
     def test_restarted_app_restores_selected_profile(self) -> None:
         client = self.harness.client

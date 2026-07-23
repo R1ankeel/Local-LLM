@@ -29,6 +29,10 @@ class OllamaModelNotFoundError(Exception):
     pass
 
 
+class OllamaStreamEndedWithoutDoneError(Exception):
+    pass
+
+
 class OllamaClient:
     def __init__(self, base_url: str, default_model: str) -> None:
         self.base_url = base_url.rstrip("/")
@@ -185,6 +189,7 @@ class OllamaClient:
             raise OllamaResponseError("Ollama вернула ошибочный ответ.") from exc
 
     async def iter_content(self, response: httpx.Response) -> AsyncIterator[str]:
+        seen_done = False
         async for line in response.aiter_lines():
             if not line:
                 continue
@@ -199,4 +204,8 @@ class OllamaClient:
                 yield content
 
             if payload.get("done"):
+                seen_done = True
                 break
+
+        if not seen_done:
+            raise OllamaStreamEndedWithoutDoneError("Ollama stream ended before done=true.")

@@ -58,6 +58,8 @@ def _chat_to_read(db: Session, chat: Chat) -> ChatRead:
         profile_id=chat.profile_id if chat.profile_id is not None else profile.id,
         context_message_limit=chat.context_message_limit,
         profile=BehaviorProfileSummary.model_validate(profile),
+        has_context_summary=bool(chat.context_summary and chat.context_summary.strip()),
+        summary_updated_at=chat.summary_updated_at,
         created_at=chat.created_at,
         updated_at=chat.updated_at,
     )
@@ -69,7 +71,11 @@ def _messages_for_chat(db: Session, chat_id: int) -> list[MessageRead]:
         .where(Message.chat_id == chat_id)
         .order_by(Message.created_at, Message.id)
     ).all()
-    return [MessageRead.model_validate(message) for message in messages]
+    return [
+        MessageRead.model_validate(message)
+        for message in messages
+        if message.role in {"user", "assistant"}
+    ]
 
 
 @router.get("", response_model=list[ChatRead])

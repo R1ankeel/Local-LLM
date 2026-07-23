@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Boolean, Column, DateTime, String, Text
 from sqlmodel import Field as SQLField, SQLModel
 
 from app.core.time import utc_now
@@ -26,6 +26,15 @@ class Chat(SQLModel, table=True):
         index=True,
         nullable=True,
     )
+    context_summary: str | None = SQLField(
+        default=None,
+        sa_column=Column(Text, nullable=True),
+    )
+    summary_through_message_id: int | None = SQLField(default=None, index=True, nullable=True)
+    summary_updated_at: datetime | None = SQLField(
+        default=None,
+        sa_column=Column(DateTime(timezone=False), nullable=True, index=True),
+    )
     context_message_limit: int = SQLField(default=40, nullable=False)
     title: str = SQLField(sa_column=Column(String(120), nullable=False))
     created_at: datetime = SQLField(
@@ -45,6 +54,7 @@ class Message(SQLModel, table=True):
     chat_id: int = SQLField(foreign_key="chats.id", index=True)
     role: MessageRole = SQLField(sa_column=Column(String(16), nullable=False))
     content: str = SQLField(sa_column=Column(String(8000), nullable=False))
+    is_complete: bool = SQLField(default=True, sa_column=Column(Boolean, nullable=False))
     created_at: datetime = SQLField(
         sa_column=Column(DateTime(timezone=False), nullable=False),
         default_factory=utc_now,
@@ -102,6 +112,7 @@ class MessageRead(BaseModel):
     chat_id: int
     role: MessageRole
     content: str
+    is_complete: bool
     created_at: datetime
 
 
@@ -113,6 +124,8 @@ class ChatRead(BaseModel):
     profile_id: int | None
     context_message_limit: int
     profile: BehaviorProfileSummary | None = None
+    has_context_summary: bool = False
+    summary_updated_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

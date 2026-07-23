@@ -71,6 +71,42 @@ def _ensure_chat_context_message_limit_column() -> None:
         )
 
 
+def _ensure_chat_summary_columns() -> None:
+    with engine.begin() as connection:
+        inspector = inspect(connection)
+        chat_columns = {column["name"] for column in inspector.get_columns("chats")}
+
+        if "context_summary" not in chat_columns:
+            connection.execute(
+                text("ALTER TABLE chats ADD COLUMN context_summary TEXT")
+            )
+        if "summary_through_message_id" not in chat_columns:
+            connection.execute(
+                text("ALTER TABLE chats ADD COLUMN summary_through_message_id INTEGER")
+            )
+        if "summary_updated_at" not in chat_columns:
+            connection.execute(
+                text("ALTER TABLE chats ADD COLUMN summary_updated_at DATETIME")
+            )
+
+
+def _ensure_message_is_complete_column() -> None:
+    with engine.begin() as connection:
+        inspector = inspect(connection)
+        message_columns = {column["name"] for column in inspector.get_columns("messages")}
+        if "is_complete" not in message_columns:
+            connection.execute(
+                text("ALTER TABLE messages ADD COLUMN is_complete BOOLEAN NOT NULL DEFAULT 1")
+            )
+        connection.execute(
+            text(
+                "UPDATE messages "
+                "SET is_complete = 1 "
+                "WHERE is_complete IS NULL"
+            )
+        )
+
+
 def _backfill_behavior_profiles() -> None:
     with Session(engine) as session:
         user_ids = [row[0] for row in session.exec(text("SELECT id FROM users")).all()]
@@ -100,6 +136,8 @@ def init_db() -> None:
     SQLModel.metadata.create_all(engine)
     _ensure_chat_profile_column()
     _ensure_chat_context_message_limit_column()
+    _ensure_chat_summary_columns()
+    _ensure_message_is_complete_column()
     _ensure_sqlite_indexes()
     _backfill_behavior_profiles()
 
