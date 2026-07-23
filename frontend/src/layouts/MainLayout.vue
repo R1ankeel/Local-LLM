@@ -1,6 +1,11 @@
 <template>
   <div class="page-shell">
-    <AppHeader :model-name="modelName" :ollama-status="ollamaStatus" />
+    <AppHeader
+      :current-user="currentUser"
+      :model-name="modelName"
+      :ollama-status="ollamaStatus"
+      @logout="$emit('logout')"
+    />
     <main class="page-main">
       <slot />
     </main>
@@ -11,6 +16,10 @@
 import AppHeader from '../components/AppHeader.vue'
 
 defineProps({
+  currentUser: {
+    type: Object,
+    default: null,
+  },
   modelName: {
     type: String,
     default: 'Unknown',
@@ -20,4 +29,6 @@ defineProps({
     default: 'Unknown',
   },
 })
+
+defineEmits(['logout'])
 </script>

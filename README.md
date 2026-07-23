@@ -1,13 +1,13 @@
-# Local AI Chat
+﻿# Local AI Chat
 
-Локальный AI-чат для домашней сети. На этапе 0.2 реализованы Ollama, один временный чат с потоковым ответом, dev proxy, production-раздача frontend через FastAPI и базовая документация.
+Локальный AI-чат для домашней сети. На этапе 0.5 добавлены production SPA fallback для `/login` и `/chat/:chatId`, а также мобильный drawer со списком чатов.
 
 ## Текущий стек
 
-- Backend: Python, FastAPI, httpx, python-dotenv
+- Backend: Python, FastAPI, httpx, python-dotenv, SQLModel, SQLite
 - Frontend: Vue 3, Vite, JavaScript, Composition API, обычный CSS
 - Модель: Ollama
-- Будущая база: SQLite, пока не подключена
+- База: SQLite
 
 ## Структура проекта
 
@@ -44,7 +44,7 @@
 - `backend/app/routers/` - HTTP endpoints.
 - `backend/app/clients/` - внешние клиенты, сейчас Ollama.
 - `backend/app/core/` - конфигурация и общие настройки.
-- `backend/app/models/` - Pydantic-схемы.
+- `backend/app/models/` - Pydantic-схемы и SQLModel-таблицы.
 - `frontend/` - Vue-приложение.
 - `frontend/src/components/` - UI-компоненты чата.
 - `frontend/src/composables/` - логика потокового чата и health-check.
@@ -66,6 +66,7 @@
 - [`backend/app/clients/ollama.py`](./backend/app/clients/ollama.py) - минимальный клиент Ollama на `httpx`.
 - [`backend/app/models/chat.py`](./backend/app/models/chat.py) - валидация запроса чата.
 - [`backend/app/routers/health.py`](./backend/app/routers/health.py) - `GET /api/health`.
+- [`backend/app/routers/chats.py`](./backend/app/routers/chats.py) - CRUD чатов.
 - [`backend/app/routers/chat.py`](./backend/app/routers/chat.py) - `POST /api/chat` с NDJSON-потоком.
 - [`frontend/package.json`](./frontend/package.json) - зависимости и скрипты frontend.
 - [`frontend/vite.config.js`](./frontend/vite.config.js) - dev proxy на backend.
@@ -94,9 +95,63 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=VladimirGav/gemma4-26b-16GB-VRAM:latest
 SERVE_FRONTEND=true
 FRONTEND_DIST_PATH=frontend/dist
+DATABASE_PATH=backend/data/local_llm.sqlite3
+SESSION_COOKIE_NAME=local_llm_session
+SESSION_TTL_DAYS=7
 VITE_API_BASE_URL=/api
 VITE_API_PROXY_TARGET=http://127.0.0.1:8000
 ```
+
+## Auth и SQLite
+
+- SQLite база хранится в `backend/data/local_llm.sqlite3` по умолчанию.
+- Cookie сессии называется `local_llm_session`.
+- Cookie выставляется как `HttpOnly`, `SameSite=Lax`, без `Secure`, чтобы работать по локальному HTTP с ПК и телефона в одной сети.
+- Пароли хранятся только в виде `pbkdf2_sha256`-хеша.
+
+## Chats и messages
+
+В базе есть четыре таблицы:
+
+- `users`
+- `sessions`
+- `chats`
+- `messages`
+
+`chats`:
+
+- `id`
+- `user_id`
+- `title`
+- `created_at`
+- `updated_at`
+
+`messages`:
+
+- `id`
+- `chat_id`
+- `role`
+- `content`
+- `created_at`
+
+## Локальная сеть
+
+### Dev-режим
+
+- Frontend Vite слушает `0.0.0.0:5173`.
+- Backend FastAPI слушает `0.0.0.0:8000`.
+- На телефоне открывай IPv4 активного Wi-Fi или Ethernet адаптера ПК, например `http://192.168.0.71:5173`.
+- `localhost` на телефоне использовать нельзя.
+- Адрес ПК можно посмотреть через `ipconfig`.
+- Обычно не нужно использовать WSL, Hyper-V, VPN или виртуальные адаптеры.
+- Оба устройства должны быть в одной локальной сети.
+- Гостевая Wi-Fi-сеть и client isolation могут блокировать соединение.
+- Windows Firewall может попросить разрешить входящие TCP-подключения на `5173` и `8000`.
+- Приложение не меняет Firewall автоматически.
+
+### Production
+
+- После `npm run build` frontend раздаётся FastAPI с одного origin на порту `8000`.
 
 ## Ollama
 
@@ -120,6 +175,16 @@ python -m venv .venv
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+### Создание первого локального пользователя
+
+Из папки `backend/`:
+
+```powershell
+python -m app.scripts.create_user --username admin --password "strong-password"
+```
+
+Команда создаёт запись в SQLite и сохраняет пароль только в виде хеша.
 
 ## Запуск frontend
 
@@ -153,27 +218,95 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 Если `frontend/dist` существует, FastAPI раздает собранный frontend с того же origin.
 
-## Открытие с телефона
+## Маршруты чатов
 
-1. ПК и телефон должны быть в одной локальной сети.
-2. Открой в браузере телефона IPv4-адрес ПК, например `http://192.168.1.25:8000`.
-3. В dev-режиме может понадобиться разрешить порты `5173` и `8000` в Windows Firewall.
+- `GET /api/chats` - список чатов текущего пользователя.
+- `POST /api/chats` - создать новый чат.
+- `GET /api/chats/{chat_id}` - получить чат вместе с сообщениями.
+- `DELETE /api/chats/{chat_id}` - удалить чат.
+- `POST /api/chat` - отправить сообщение в конкретный чат.
+
+Для `POST /api/chat` frontend передаёт:
+
+- `chat_id`
+- `content`
+- `mode`
+
+Ответ остаётся NDJSON-потоком с событиями:
+
+- `type=content`
+- `type=done`
+- `type=error`
+
+## SPA fallback
+
+Production backend теперь отдаёт `index.html` для прямых заходов на:
+
+- `/`
+- `/login`
+- `/chat/3`
+
+Это нужно для обновления страницы, прямых ссылок и открытия чата на другом устройстве без `404 Not Found`.
 
 ## Режимы чата
 
 - `Instant` - обычный ответ Ollama.
 - `Thinking` - ответ с `think: true`.
 
+## Вход и выход
+
+- Вход: `POST /api/auth/login` принимает `username` и `password`, возвращает пользователя и устанавливает HttpOnly cookie.
+- Текущий пользователь: `GET /api/auth/me`.
+- Выход: `POST /api/auth/logout` удаляет серверную сессию и очищает cookie.
+- Без действующей сессии `GET /api/chats` и `POST /api/chat` возвращают `401`.
+
 ## Важные ограничения этапа
 
-- История не сохраняется после обновления страницы.
-- Нет SQLite, нескольких чатов, поиска, xAI, DuckDuckGo, авторизации, Markdown и WebSocket.
-- Backend не хранит постоянную историю.
-- Frontend отправляет только историю текущей страницы.
+- История теперь сохраняется в SQLite между обновлениями страницы.
+- Нет памяти отдельных вкладок, выбора моделей, системных промптов, суммаризации контекста, ролей и административной панели.
+- Нет публичной регистрации.
+- Нет следующих этапов roadmap.
 
 ## Проверка
 
-Основной health endpoint:
+Основные проверки:
 
-- `GET /api/health`
+- `GET /api/auth/me` без cookie возвращает `401`
+- `POST /api/auth/login` с неверным паролем не создаёт сессию
+- `POST /api/auth/login` с верным паролем устанавливает HttpOnly cookie
+- `GET /api/auth/me` после входа возвращает пользователя
+- `GET /api/chats` без cookie возвращает `401`
+- `POST /api/chats` создаёт чат только для текущего пользователя
+- `POST /api/chat` без cookie возвращает `401`
+- `POST /api/chat` с cookie сохраняет user/assistant messages и продолжает стримить NDJSON по частям
+- `POST /api/auth/logout` инвалидирует старую сессию
+- `DELETE /api/chats/{chat_id}` удаляет чат и его сообщения
+- Прямые URL `/login` и `/chat/:chatId` в production должны открываться без `404`
 
+Команды проверки:
+
+```powershell
+cd frontend
+npm run build
+
+cd ..\backend
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Для проверки входа с ПК и телефона:
+
+1. Запусти backend на `0.0.0.0:8000`.
+2. Открой приложение с ПК по `http://127.0.0.1:8000`.
+3. Открой то же приложение с телефона по локальному IP ПК, например `http://192.168.0.71:8000`.
+4. Войди под созданным локальным пользователем на обоих устройствах.
+
+Фронтенд роуты:
+
+- `/login`
+- `/`
+- `/chat/:chatId`
+
+UI:
+
+- На desktop список чатов виден рядом с текущим чатом.
+- На mobile список чатов открывается как drawer поверх контента.

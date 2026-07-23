@@ -20,12 +20,12 @@ frontend/dist/
 .env
 backend/.env
 frontend/.env
+backend/data/
 
 # Editor and OS
 .vscode/
 .idea/
 Thumbs.db
 Desktop.ini
-.agents
+.agents/
 ARCHITECTURE.md
-

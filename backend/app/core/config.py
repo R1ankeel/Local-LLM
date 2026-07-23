@@ -27,3 +27,9 @@ FRONTEND_DIST_PATH = _resolve_path(
     os.getenv("FRONTEND_DIST_PATH", "frontend/dist"),
     ROOT_DIR / "frontend" / "dist",
 )
+DATABASE_PATH = _resolve_path(
+    os.getenv("DATABASE_PATH", "backend/data/local_llm.sqlite3"),
+    ROOT_DIR / "backend" / "data" / "local_llm.sqlite3",
+)
+SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "local_llm_session")
+SESSION_TTL_DAYS = int(os.getenv("SESSION_TTL_DAYS", "7"))

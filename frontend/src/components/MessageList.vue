@@ -2,10 +2,10 @@
   <section ref="scrollContainer" class="message-list" @scroll="handleScroll">
     <div v-if="showEmptyState" class="empty-state">
       <p class="empty-kicker">Ready for the first message</p>
-      <h2>One temporary chat with no history after refresh</h2>
+      <h2>This chat is empty for now</h2>
       <p>
-        Pick a mode, write a message, and send it. The answer from Ollama arrives as a stream
-        directly into the current conversation.
+        Pick a mode, write a message, and send it. The response from Ollama arrives as a stream
+        and is saved in the current chat.
       </p>
     </div>
 
