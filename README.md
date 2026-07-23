@@ -1,6 +1,6 @@
 ﻿# Local AI Chat
 
-Локальный AI-чат для домашней сети. На этапе 0.5 добавлены production SPA fallback для `/login` и `/chat/:chatId`, а также мобильный drawer со списком чатов.
+Локальный AI-чат для домашней сети. На этапе 0.5 добавлены production SPA fallback для `/login` и `/chat/:chatId`, мобильный drawer со списком чатов и глобальная активная модель Ollama для всего backend.
 
 ## Текущий стек
 
@@ -64,9 +64,11 @@
 - [`backend/app/main.py`](./backend/app/main.py) - FastAPI-приложение, роуты и раздача production frontend.
 - [`backend/app/core/config.py`](./backend/app/core/config.py) - чтение `.env`.
 - [`backend/app/clients/ollama.py`](./backend/app/clients/ollama.py) - минимальный клиент Ollama на `httpx`.
-- [`backend/app/models/chat.py`](./backend/app/models/chat.py) - валидация запроса чата.
+- [`backend/app/models/chat.py`](./backend/app/models/chat.py) - таблицы `chats` и `messages`, а также схемы запросов чата.
+- [`backend/app/models/ollama.py`](./backend/app/models/ollama.py) - схемы ответа `/api/models`.
 - [`backend/app/routers/health.py`](./backend/app/routers/health.py) - `GET /api/health`.
 - [`backend/app/routers/chats.py`](./backend/app/routers/chats.py) - CRUD чатов.
+- [`backend/app/routers/models.py`](./backend/app/routers/models.py) - `GET /api/models`.
 - [`backend/app/routers/chat.py`](./backend/app/routers/chat.py) - `POST /api/chat` с NDJSON-потоком.
 - [`frontend/package.json`](./frontend/package.json) - зависимости и скрипты frontend.
 - [`frontend/vite.config.js`](./frontend/vite.config.js) - dev proxy на backend.
@@ -92,7 +94,7 @@
 APP_HOST=0.0.0.0
 APP_PORT=8000
 OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=VladimirGav/gemma4-26b-16GB-VRAM:latest
+OLLAMA_DEFAULT_MODEL=VladimirGav/gemma4-26b-16GB-VRAM:latest
 SERVE_FRONTEND=true
 FRONTEND_DIST_PATH=frontend/dist
 DATABASE_PATH=backend/data/local_llm.sqlite3
@@ -122,6 +124,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8000
 
 - `id`
 - `user_id`
+- `model`
 - `title`
 - `created_at`
 - `updated_at`
@@ -165,6 +168,17 @@ ollama pull VladimirGav/gemma4-26b-16GB-VRAM:latest
 
 - `GET /api/tags`
 - `POST /api/chat`
+
+Backend также отдаёт нормализованный список моделей через `GET /api/models`.
+
+Для ограниченной VRAM дополнительно рекомендуются настройки Ollama:
+
+```env
+OLLAMA_MAX_LOADED_MODELS=1
+OLLAMA_NUM_PARALLEL=1
+```
+
+Эти значения помогают не держать много моделей в памяти одновременно, но они не заменяют серверный lock и явную выгрузку модели.
 
 ## Запуск backend
 
@@ -224,7 +238,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - `POST /api/chats` - создать новый чат.
 - `GET /api/chats/{chat_id}` - получить чат вместе с сообщениями.
 - `DELETE /api/chats/{chat_id}` - удалить чат.
-- `POST /api/chat` - отправить сообщение в конкретный чат.
+- `GET /api/models` - список установленных моделей Ollama для текущего пользователя.
+- `POST /api/chat` - отправить сообщение в конкретный чат с глобальной активной моделью.
 
 Для `POST /api/chat` frontend передаёт:
 
@@ -232,11 +247,29 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - `content`
 - `mode`
 
+Модель в запросе на генерацию не передаётся: backend берёт её из глобальной серверной настройки.
+
 Ответ остаётся NDJSON-потоком с событиями:
 
 - `type=content`
 - `type=done`
 - `type=error`
+
+## Модели Ollama
+
+- Текущая активная модель задаётся через `OLLAMA_DEFAULT_MODEL`.
+- `GET /api/models` возвращает `active_model` и список установленных моделей.
+- Обычный пользователь только видит активную модель.
+- Backend уже содержит отдельный сервис для будущего admin endpoint, но сам endpoint в рамках этого этапа не добавлен.
+- Если админский переход модели будет запрошен во время активной генерации, сервис вернёт контролируемую ошибку `409`, чтобы не менять модель посреди запроса.
+- Смена модели в сервисе идёт через явную выгрузку старой модели (`keep_alive: 0`), проверку `/api/ps`, затем предварительную загрузку новой (`keep_alive: -1`).
+- Если Ollama недоступна, `GET /api/models` и создание сообщения возвращают контролируемую ошибку, а сохранённые чаты и история остаются доступными.
+
+## Миграция SQLite
+
+- При старте backend создаёт отсутствующие таблицы через SQLModel.
+- Существующие пользователи, сессии, чаты и сообщения сохраняются.
+- Таблица `chats` не получает отдельную колонку для модели.
 
 ## SPA fallback
 
@@ -263,7 +296,7 @@ Production backend теперь отдаёт `index.html` для прямых з
 ## Важные ограничения этапа
 
 - История теперь сохраняется в SQLite между обновлениями страницы.
-- Нет памяти отдельных вкладок, выбора моделей, системных промптов, суммаризации контекста, ролей и административной панели.
+- Нет памяти отдельных вкладок, системных промптов, суммаризации контекста, ролей и административной панели.
 - Нет публичной регистрации.
 - Нет следующих этапов roadmap.
 
@@ -272,6 +305,7 @@ Production backend теперь отдаёт `index.html` для прямых з
 Основные проверки:
 
 - `GET /api/auth/me` без cookie возвращает `401`
+- `GET /api/models` без cookie возвращает `401`
 - `POST /api/auth/login` с неверным паролем не создаёт сессию
 - `POST /api/auth/login` с верным паролем устанавливает HttpOnly cookie
 - `GET /api/auth/me` после входа возвращает пользователя
@@ -279,8 +313,11 @@ Production backend теперь отдаёт `index.html` для прямых з
 - `POST /api/chats` создаёт чат только для текущего пользователя
 - `POST /api/chat` без cookie возвращает `401`
 - `POST /api/chat` с cookie сохраняет user/assistant messages и продолжает стримить NDJSON по частям
+- `POST /api/chat` использует глобальную активную модель backend
 - `POST /api/auth/logout` инвалидирует старую сессию
 - `DELETE /api/chats/{chat_id}` удаляет чат и его сообщения
+- `GET /api/models` с cookie возвращает `active_model` и список моделей Ollama
+- недоступность Ollama не ломает просмотр сохранённых чатов
 - Прямые URL `/login` и `/chat/:chatId` в production должны открываться без `404`
 
 Команды проверки:

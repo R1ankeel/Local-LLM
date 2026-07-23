@@ -58,20 +58,24 @@
               Chats
             </button>
             <p v-if="currentChat" class="chat-meta-inline">#{{ currentChat.id }}</p>
+            <p v-if="currentChat" class="chat-meta-inline">Model: {{ modelName }}</p>
           </div>
         </div>
+
+        <p v-if="modelNotice" class="stream-error" role="alert">{{ modelNotice }}</p>
 
         <MessageList :messages="currentMessages" />
 
         <p v-if="streamError" class="stream-error" role="alert">{{ streamError }}</p>
         <p v-else-if="healthError" class="stream-error" role="alert">{{ healthError }}</p>
+        <p v-else-if="modelsError" class="stream-error" role="alert">{{ modelsError }}</p>
 
         <ChatComposer
           v-model="composerText"
           v-model:mode="mode"
           :disabled="isGenerating || healthStatus === 'loading' || !currentChat"
           :is-generating="isGenerating"
-          placeholder="Введите сообщение и нажмите Enter"
+          placeholder="Type a message and press Enter"
           @send="sendMessage"
           @stop="stopGeneration"
         />
@@ -90,6 +94,7 @@ import { useHealth } from '../composables/useHealth.js'
 import { useChatStream } from '../composables/useChatStream.js'
 import { useAuth } from '../composables/useAuth.js'
 import { useChats } from '../composables/useChats.js'
+import { useModels } from '../composables/useModels.js'
 
 const composerText = ref('')
 const mode = ref('instant')
@@ -113,8 +118,16 @@ const {
   refreshChats,
   resetChats,
 } = useChats()
+const {
+  activeModel,
+  error: modelsError,
+  models,
+  refreshModels,
+  status: modelsStatus,
+} = useModels()
 
-const modelName = computed(() => health.value?.model || 'Unknown')
+const modelName = computed(() => activeModel.value || health.value?.model || 'Unknown')
+
 const ollamaStatus = computed(() => {
   if (healthStatus.value === 'loading') return 'Checking'
   if (healthStatus.value === 'error') return 'Unavailable'
@@ -123,6 +136,18 @@ const ollamaStatus = computed(() => {
 })
 
 const activeChatId = computed(() => Number(route.params.chatId || currentChat.value?.id || 0))
+
+const modelNotice = computed(() => {
+  if (modelsStatus.value === 'error') {
+    return modelsError.value || 'Ollama is unavailable'
+  }
+
+  if (models.value.length > 0 && modelName.value && !models.value.some((model) => model.name === modelName.value)) {
+    return `Active model is not installed in Ollama: ${modelName.value}`
+  }
+
+  return ''
+})
 
 function uid() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -290,6 +315,7 @@ watch(
 
 onMounted(() => {
   refreshHealth()
+  refreshModels().catch(() => {})
   refreshChats().catch(() => {})
   closeSidebar()
 })

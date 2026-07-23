@@ -196,6 +196,7 @@ button {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .sidebar-title,
@@ -360,6 +361,36 @@ button {
   border: 1px solid rgba(180, 35, 24, 0.22);
   background: rgba(180, 35, 24, 0.08);
   color: var(--danger);
+}
+
+.model-picker {
+  min-width: 0;
+  flex: 1 1 220px;
+  max-width: 280px;
+}
+
+.model-selector {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.68rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  outline: none;
+}
+
+.model-selector:focus {
+  border-color: rgba(30, 111, 140, 0.45);
+  box-shadow: 0 0 0 4px rgba(30, 111, 140, 0.12);
+}
+
+.model-selector:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
 }
 
 .auth-page {
@@ -605,6 +636,12 @@ button {
     width: 100%;
     justify-content: stretch;
     flex-wrap: wrap;
+  }
+
+  .model-picker {
+    width: 100%;
+    max-width: none;
+    flex-basis: 100%;
   }
 
   .sidebar-action {

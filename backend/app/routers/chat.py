@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 
 from app.clients.ollama import (
+    OllamaModelNotFoundError,
     OllamaResponseError,
     OllamaTimeoutError,
     OllamaUnavailableError,
@@ -48,64 +49,72 @@ async def chat(
     db: Session = Depends(get_db),
 ):
     chat = _get_owned_chat(db, payload.chat_id, current_user.id)
-
-    user_message = Message(
-        chat_id=chat.id,
-        role="user",
-        content=payload.content,
-    )
-    db.add(user_message)
-    touch_chat_title(chat, payload.content)
-    chat.updated_at = utc_now()
-    db.commit()
-    db.refresh(chat)
-
-    request_messages = _ordered_messages(db, chat.id)
     client = request.app.state.ollama_client
-    think = payload.mode == "thinking"
+    model_manager = request.app.state.model_manager
 
     async def stream():
         assistant_message: Message | None = None
         assistant_text = ""
 
-        try:
-            async with client.stream_chat(request_messages, think) as response:
-                async for chunk in client.iter_content(response):
-                    if await request.is_disconnected():
-                        break
+        async with model_manager.generation() as generation_model:
+            try:
+                await client.ensure_model_available(generation_model)
 
-                    assistant_text += chunk
-                    if assistant_message is None:
-                        assistant_message = Message(
-                            chat_id=chat.id,
-                            role="assistant",
-                            content=assistant_text,
-                        )
-                        db.add(assistant_message)
-                    else:
-                        assistant_message.content = assistant_text
+                user_message = Message(
+                    chat_id=chat.id,
+                    role="user",
+                    content=payload.content,
+                )
+                db.add(user_message)
+                touch_chat_title(chat, payload.content)
+                chat.updated_at = utc_now()
+                db.commit()
+                db.refresh(chat)
 
-                    chat.updated_at = utc_now()
-                    db.commit()
+                request_messages = _ordered_messages(db, chat.id)
+                think = payload.mode == "thinking"
 
-                    yield _ndjson_event({"type": "content", "content": chunk})
+                async with client.stream_chat(generation_model, request_messages, think) as response:
+                    async for chunk in client.iter_content(response):
+                        if await request.is_disconnected():
+                            break
 
+                        assistant_text += chunk
+                        if assistant_message is None:
+                            assistant_message = Message(
+                                chat_id=chat.id,
+                                role="assistant",
+                                content=assistant_text,
+                            )
+                            db.add(assistant_message)
+                        else:
+                            assistant_message.content = assistant_text
+
+                        chat.updated_at = utc_now()
+                        db.commit()
+
+                        yield _ndjson_event({"type": "content", "content": chunk})
+
+                    if not await request.is_disconnected():
+                        yield _ndjson_event({"type": "done"})
+            except (OllamaUnavailableError, OllamaTimeoutError, OllamaResponseError) as exc:
+                logger.warning("Chat stream failed: %s", exc)
                 if not await request.is_disconnected():
-                    yield _ndjson_event({"type": "done"})
-        except (OllamaUnavailableError, OllamaTimeoutError, OllamaResponseError) as exc:
-            logger.warning("Chat stream failed: %s", exc)
-            if not await request.is_disconnected():
-                message = "Ollama is unavailable"
-                if isinstance(exc, OllamaTimeoutError):
-                    message = "Ollama chat timed out"
-                elif isinstance(exc, OllamaResponseError):
-                    message = "Ollama returned an error response"
-                yield _ndjson_event({"type": "error", "message": message})
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("Unexpected chat error")
-            if not await request.is_disconnected():
-                yield _ndjson_event({"type": "error", "message": "Unexpected chat error"})
+                    message = "Ollama is unavailable"
+                    if isinstance(exc, OllamaTimeoutError):
+                        message = "Ollama chat timed out"
+                    elif isinstance(exc, OllamaResponseError):
+                        message = "Ollama returned an error response"
+                    yield _ndjson_event({"type": "error", "message": message})
+            except OllamaModelNotFoundError as exc:
+                logger.warning("Active model is unavailable: %s", exc)
+                if not await request.is_disconnected():
+                    yield _ndjson_event({"type": "error", "message": str(exc)})
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Unexpected chat error")
+                if not await request.is_disconnected():
+                    yield _ndjson_event({"type": "error", "message": "Unexpected chat error"})
 
     return StreamingResponse(stream(), media_type="application/x-ndjson")

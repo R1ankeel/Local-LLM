@@ -6,14 +6,7 @@ from sqlmodel import Session, delete, select
 from app.db import get_db
 from app.dependencies import get_current_user, utc_now
 from app.models.auth import User
-from app.models.chat import (
-    Chat,
-    ChatCreateRequest,
-    ChatDetailRead,
-    ChatRead,
-    Message,
-    MessageRead,
-)
+from app.models.chat import Chat, ChatCreateRequest, ChatDetailRead, ChatRead, Message, MessageRead
 
 
 router = APIRouter(prefix="/chats")

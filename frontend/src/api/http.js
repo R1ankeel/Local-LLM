@@ -62,6 +62,14 @@ export function deleteJson(path, options = {}) {
   })
 }
 
+export function patchJson(path, body, options = {}) {
+  return requestJson(path, {
+    ...options,
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
 export function postStream(path, body, options = {}) {
   return fetch(buildUrl(path), {
     ...options,

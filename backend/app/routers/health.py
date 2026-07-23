@@ -13,15 +13,16 @@ router = APIRouter()
 @router.get("/health")
 async def health(request: Request):
     client = request.app.state.ollama_client
+    manager = request.app.state.model_manager
     payload = {
         "app": "ok",
         "ollama": "unavailable",
-        "model": client.model,
+        "model": manager.active_model,
         "model_available": False,
     }
 
     try:
-        ollama_health = await client.get_health()
+        ollama_health = await client.get_health(manager.active_model)
     except (OllamaUnavailableError, OllamaTimeoutError, OllamaResponseError):
         return payload
 

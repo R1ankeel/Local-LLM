@@ -8,7 +8,7 @@ from app.clients.ollama import OllamaClient
 from app.core.config import (
     FRONTEND_DIST_PATH,
     OLLAMA_BASE_URL,
-    OLLAMA_MODEL,
+    OLLAMA_DEFAULT_MODEL,
     SERVE_FRONTEND,
 )
 from app.db import init_db
@@ -16,6 +16,8 @@ from app.routers.auth import router as auth_router
 from app.routers.chat import router as chat_router
 from app.routers.chats import router as chats_router
 from app.routers.health import router as health_router
+from app.routers.models import router as models_router
+from app.services.model_manager import ModelManager
 
 
 class SPAStaticFiles(StaticFiles):
@@ -40,7 +42,8 @@ class SPAStaticFiles(StaticFiles):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    app.state.ollama_client = OllamaClient(OLLAMA_BASE_URL, OLLAMA_MODEL)
+    app.state.ollama_client = OllamaClient(OLLAMA_BASE_URL, OLLAMA_DEFAULT_MODEL)
+    app.state.model_manager = ModelManager(app.state.ollama_client, OLLAMA_DEFAULT_MODEL)
     try:
         yield
     finally:
@@ -51,6 +54,7 @@ app = FastAPI(title="Local AI Chat", version="0.4.1", lifespan=lifespan)
 app.include_router(health_router, prefix="/api", tags=["health"])
 app.include_router(auth_router, prefix="/api", tags=["auth"])
 app.include_router(chats_router, prefix="/api", tags=["chats"])
+app.include_router(models_router, prefix="/api", tags=["models"])
 app.include_router(chat_router, prefix="/api", tags=["chat"])
 
 
