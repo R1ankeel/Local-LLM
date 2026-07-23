@@ -1,7 +1,7 @@
-<template>
+﻿<template>
   <form class="composer" @submit.prevent="handleSubmit">
     <div class="composer-topline">
-      <div class="mode-switch" role="radiogroup" aria-label="Response mode">
+      <div class="mode-switch" role="radiogroup" aria-label="Режим ответа">
         <button
           v-for="option in modeOptions"
           :key="option.value"
@@ -16,7 +16,7 @@
       </div>
 
       <button v-if="isGenerating" class="stop-button" type="button" @click="emit('stop')">
-        Остановить
+        Остановить генерацию
       </button>
       <button v-else class="send-button" type="submit" :disabled="disabled || !canSend">
         Отправить
@@ -24,7 +24,7 @@
     </div>
 
     <label class="composer-field">
-      <span class="sr-only">Введите сообщение</span>
+      <span class="sr-only">Сообщение</span>
       <textarea
         ref="textareaRef"
         :value="modelValue"
@@ -61,7 +61,7 @@ const props = defineProps({
   },
   placeholder: {
     type: String,
-    default: 'Напишите сообщение...',
+    default: 'Введите сообщение...',
   },
 })
 
@@ -72,8 +72,8 @@ const textareaRef = ref(null)
 const canSend = computed(() => props.modelValue.trim().length > 0)
 
 const modeOptions = [
-  { value: 'instant', label: 'Instant' },
-  { value: 'thinking', label: 'Thinking' },
+  { value: 'instant', label: 'Мгновенно' },
+  { value: 'thinking', label: 'С обдумыванием' },
 ]
 
 function resizeTextarea() {

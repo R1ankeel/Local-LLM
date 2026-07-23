@@ -1,8 +1,13 @@
-import { ref } from 'vue'
+﻿import { ref } from 'vue'
 import { postStream } from '../api/http.js'
+import { toUserErrorMessage } from '../utils/errors.js'
 
 function normalizeError(message) {
-  return message || 'Не удалось получить ответ'
+  if (typeof message === 'string' && /[А-Яа-яЁё]/.test(message)) {
+    return message
+  }
+
+  return 'Запрос не выполнен.'
 }
 
 export function useChatStream() {
@@ -38,7 +43,7 @@ export function useChatStream() {
       })
 
       if (!response.ok || !response.body) {
-        throw new Error(`Request failed with status ${response.status}`)
+        throw new Error(`Запрос не выполнен. Код: ${response.status}`)
       }
 
       const reader = response.body.getReader()
@@ -83,7 +88,7 @@ export function useChatStream() {
           }
 
           if (event.type === 'error') {
-            throw new Error(event.message || 'Unknown error')
+            throw new Error(event.message || 'Неизвестная ошибка.')
           }
         }
 
@@ -100,7 +105,7 @@ export function useChatStream() {
           assistantText.value += event.content || ''
           handlers.onChunk?.(assistantText.value, event.content || '')
         } else if (event.type === 'error') {
-          throw new Error(event.message || 'Unknown error')
+          throw new Error(event.message || 'Неизвестная ошибка.')
         }
       }
 
@@ -115,7 +120,7 @@ export function useChatStream() {
         return { started, text: assistantText.value, aborted: true }
       }
 
-      const message = err instanceof Error ? normalizeError(err.message) : normalizeError('')
+      const message = err instanceof Error ? normalizeError(err.message) : 'Запрос не выполнен.'
       error.value = message
       handlers.onError?.({ started, text: assistantText.value, message })
       return { started, text: assistantText.value, aborted: false, error: message }
@@ -133,3 +138,4 @@ export function useChatStream() {
     stop,
   }
 }
+

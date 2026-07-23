@@ -1,5 +1,6 @@
-import { computed, ref } from 'vue'
+﻿import { computed, ref } from 'vue'
 import { getJson } from '../api/http.js'
+import { toUserErrorMessage } from '../utils/errors.js'
 
 const models = ref([])
 const activeModel = ref('')
@@ -24,7 +25,7 @@ async function refreshModels() {
     models.value = []
     activeModel.value = ''
     status.value = 'error'
-    error.value = err instanceof Error ? err.message : 'Unknown error'
+    error.value = toUserErrorMessage(err)
     throw err
   }
 }

@@ -1,8 +1,8 @@
-<template>
+﻿<template>
   <div class="auth-page">
     <section class="auth-card">
-      <p class="brand-kicker">Local network</p>
-      <h1 class="auth-title">Opening chat</h1>
+      <p class="brand-kicker">Локальная сеть</p>
+      <h1 class="auth-title">Открытие чата</h1>
       <p class="auth-copy">{{ statusText }}</p>
     </section>
   </div>
@@ -18,10 +18,10 @@ const { chats, createChat, refreshChats } = useChats()
 
 const statusText = computed(() => {
   if (chats.value.length === 0) {
-    return 'Creating your first local chat...'
+    return 'Создаём ваш первый локальный чат...'
   }
 
-  return 'Opening your most recent chat...'
+  return 'Открываем ваш последний чат...'
 })
 
 onMounted(async () => {

@@ -7,7 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Column, DateTime, String
 from sqlmodel import Field as SQLField, SQLModel
 
-from app.models.auth import utc_now
+from app.core.time import utc_now
+from app.models.behavior_profile import BehaviorProfileSummary
 
 
 ChatMode = Literal["instant", "thinking"]
@@ -19,6 +20,12 @@ class Chat(SQLModel, table=True):
 
     id: int | None = SQLField(default=None, primary_key=True)
     user_id: int = SQLField(foreign_key="users.id", index=True, nullable=False)
+    profile_id: int | None = SQLField(
+        default=None,
+        foreign_key="behavior_profiles.id",
+        index=True,
+        nullable=True,
+    )
     title: str = SQLField(sa_column=Column(String(120), nullable=False))
     created_at: datetime = SQLField(
         sa_column=Column(DateTime(timezone=False), nullable=False),
@@ -47,6 +54,27 @@ class ChatCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str | None = Field(default=None, max_length=120)
+    profile_id: int | None = Field(default=None, gt=0)
+
+    @field_validator("profile_id")
+    @classmethod
+    def profile_id_must_be_positive(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("Идентификатор профиля должен быть больше 0.")
+        return value
+
+
+class ChatUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: int | None = Field(default=None)
+
+    @field_validator("profile_id")
+    @classmethod
+    def profile_id_must_be_positive(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("Идентификатор профиля должен быть больше 0.")
+        return value
 
 
 class ChatTurnRequest(BaseModel):
@@ -60,7 +88,7 @@ class ChatTurnRequest(BaseModel):
     @classmethod
     def content_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError("content must not be blank")
+            raise ValueError("Сообщение не должно быть пустым.")
         return value
 
 
@@ -79,6 +107,8 @@ class ChatRead(BaseModel):
 
     id: int
     title: str
+    profile_id: int | None
+    profile: BehaviorProfileSummary | None = None
     created_at: datetime
     updated_at: datetime
 

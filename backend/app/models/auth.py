@@ -6,9 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Column, DateTime, Index, String
 from sqlmodel import Field as SQLField, SQLModel
 
-
-def utc_now() -> datetime:
-    return datetime.utcnow()
+from app.core.time import utc_now
 
 
 class User(SQLModel, table=True):

@@ -1,5 +1,6 @@
-import { ref } from 'vue'
+﻿import { ref } from 'vue'
 import { getJson } from '../api/http.js'
+import { toUserErrorMessage } from '../utils/errors.js'
 
 export function useHealth() {
   const health = ref(null)
@@ -15,7 +16,7 @@ export function useHealth() {
       status.value = 'ready'
     } catch (err) {
       health.value = null
-      error.value = err instanceof Error ? err.message : 'Unknown error'
+      error.value = toUserErrorMessage(err)
       status.value = 'error'
     }
   }

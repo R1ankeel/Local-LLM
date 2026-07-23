@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+﻿const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 function buildUrl(path) {
   return `${API_BASE_URL}${path}`
@@ -11,10 +11,10 @@ async function parseError(response) {
       return payload.detail
     }
   } catch {
-    // Fall through to a generic error message.
+    // Переходим к общему сообщению об ошибке.
   }
 
-  return `Request failed with status ${response.status}`
+  return `Запрос не выполнен. Код: ${response.status}`
 }
 
 export async function requestJson(path, options = {}) {

@@ -1,28 +1,28 @@
-<template>
+﻿<template>
   <div class="auth-page">
     <section class="auth-card">
-      <p class="brand-kicker">Local network</p>
-      <h1 class="auth-title">Sign in</h1>
+      <p class="brand-kicker">Локальная сеть</p>
+      <h1 class="auth-title">Вход</h1>
       <p class="auth-copy">
-        Use your local backend account to open the chat. The session is stored in an HttpOnly
-        cookie.
+        Используйте локальную учетную запись бэкенда, чтобы открыть чат. Сеанс сохраняется в
+        cookie HttpOnly.
       </p>
 
       <form class="auth-form" @submit.prevent="handleLogin">
         <label class="auth-field">
-          <span>Username</span>
+          <span>Имя пользователя</span>
           <input v-model="username" type="text" autocomplete="username" required />
         </label>
 
         <label class="auth-field">
-          <span>Password</span>
+          <span>Пароль</span>
           <input v-model="password" type="password" autocomplete="current-password" required />
         </label>
 
         <p v-if="errorMessage" class="stream-error" role="alert">{{ errorMessage }}</p>
 
         <button class="send-button auth-submit" type="submit" :disabled="loading">
-          {{ loading ? 'Signing in...' : 'Sign in' }}
+          {{ loading ? 'Выполняется вход...' : 'Войти' }}
         </button>
       </form>
     </section>
@@ -58,7 +58,9 @@ async function handleLogin() {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
     await router.push(redirect)
   } catch (err) {
-    localError.value = err instanceof Error ? err.message : 'Login failed'
+    localError.value = err instanceof Error && /[А-Яа-яЁё]/.test(err.message)
+      ? err.message
+      : 'Не удалось выполнить вход.'
   } finally {
     loading.value = false
   }

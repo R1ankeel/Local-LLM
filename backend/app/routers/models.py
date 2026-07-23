@@ -23,9 +23,9 @@ async def list_models(
     try:
         models = await client.list_models()
     except (OllamaUnavailableError, OllamaTimeoutError):
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Ollama is unavailable")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Ollama недоступна.")
     except OllamaResponseError:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Ollama returned an error response")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Ollama вернула ошибочный ответ.")
 
     return OllamaModelsRead(
         models=[OllamaModelRead.model_validate(model) for model in models],

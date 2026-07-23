@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page-shell">
     <AppHeader
       :current-user="currentUser"
@@ -22,11 +22,11 @@ defineProps({
   },
   modelName: {
     type: String,
-    default: 'Unknown',
+    default: 'Неизвестно',
   },
   ollamaStatus: {
     type: String,
-    default: 'Unknown',
+    default: 'Неизвестно',
   },
 })
 

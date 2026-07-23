@@ -6,10 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlmodel import Session, select
 
 from app.core.config import SESSION_COOKIE_NAME, SESSION_TTL_DAYS
+from app.core.time import utc_now
 from app.core.security import generate_session_token, hash_password, verify_password
 from app.db import get_db
-from app.dependencies import get_current_user, utc_now
+from app.dependencies import get_current_user
 from app.models.auth import LoginRequest, Session as UserSession, User, UserPublic
+from app.services.behavior_profiles import ensure_default_profile
 
 
 router = APIRouter(prefix="/auth")
@@ -38,7 +40,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
+            detail="Неверное имя пользователя или пароль.",
         )
 
     session_token = generate_session_token()
@@ -76,10 +78,11 @@ def me(current_user: User = Depends(get_current_user)):
 def create_user(db: Session, username: str, password: str) -> User:
     existing_user = db.exec(select(User).where(User.username == username)).first()
     if existing_user:
-        raise ValueError(f"User '{username}' already exists")
+        raise ValueError(f"Пользователь '{username}' уже существует")
 
     user = User(username=username, password_hash=hash_password(password))
     db.add(user)
     db.commit()
     db.refresh(user)
+    ensure_default_profile(db, user.id)
     return user

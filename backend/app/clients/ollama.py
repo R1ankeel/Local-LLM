@@ -47,11 +47,11 @@ class OllamaClient:
             response.raise_for_status()
             return response.json()
         except httpx.TimeoutException as exc:
-            raise OllamaTimeoutError("Ollama request timed out") from exc
+            raise OllamaTimeoutError("Истекло время ожидания запроса к Ollama.") from exc
         except httpx.RequestError as exc:
-            raise OllamaUnavailableError("Ollama is unavailable") from exc
+            raise OllamaUnavailableError("Ollama недоступна.") from exc
         except httpx.HTTPStatusError as exc:
-            raise OllamaResponseError("Ollama returned an error response") from exc
+            raise OllamaResponseError("Ollama вернула ошибочный ответ.") from exc
 
     async def _post_json(self, path: str, payload: dict) -> dict:
         try:
@@ -59,11 +59,11 @@ class OllamaClient:
             response.raise_for_status()
             return response.json()
         except httpx.TimeoutException as exc:
-            raise OllamaTimeoutError("Ollama request timed out") from exc
+            raise OllamaTimeoutError("Истекло время ожидания запроса к Ollama.") from exc
         except httpx.RequestError as exc:
-            raise OllamaUnavailableError("Ollama is unavailable") from exc
+            raise OllamaUnavailableError("Ollama недоступна.") from exc
         except httpx.HTTPStatusError as exc:
-            raise OllamaResponseError("Ollama returned an error response") from exc
+            raise OllamaResponseError("Ollama вернула ошибочный ответ.") from exc
 
     async def list_models(self) -> list[dict]:
         payload = await self._get_json("/api/tags")
@@ -95,7 +95,7 @@ class OllamaClient:
         if any(item.get("name") == model for item in models):
             return
 
-        raise OllamaModelNotFoundError(f"Model '{model}' is not available in Ollama")
+        raise OllamaModelNotFoundError(f"Модель '{model}' недоступна в Ollama.")
 
     async def get_health(self, active_model: str) -> dict:
         models = await self.list_models()
@@ -136,7 +136,7 @@ class OllamaClient:
                 return
 
             if time.monotonic() - started_at >= timeout_seconds:
-                raise OllamaTimeoutError(f"Timed out waiting for model '{model}' to unload")
+                raise OllamaTimeoutError(f"Истекло время ожидания выгрузки модели '{model}'.")
 
             await asyncio.sleep(0.5)
 
@@ -178,11 +178,11 @@ class OllamaClient:
                 response.raise_for_status()
                 yield response
         except httpx.TimeoutException as exc:
-            raise OllamaTimeoutError("Ollama chat timed out") from exc
+            raise OllamaTimeoutError("Истекло время ожидания ответа Ollama.") from exc
         except httpx.RequestError as exc:
-            raise OllamaUnavailableError("Ollama is unavailable") from exc
+            raise OllamaUnavailableError("Ollama недоступна.") from exc
         except httpx.HTTPStatusError as exc:
-            raise OllamaResponseError("Ollama returned an error response") from exc
+            raise OllamaResponseError("Ollama вернула ошибочный ответ.") from exc
 
     async def iter_content(self, response: httpx.Response) -> AsyncIterator[str]:
         async for line in response.aiter_lines():

@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlmodel import Session, select
 
 from app.core.config import SESSION_COOKIE_NAME
+from app.core.time import utc_now
 from app.db import get_db
 from app.models.auth import Session as UserSession
 from app.models.auth import User
-
-
-def utc_now() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def get_current_user(
@@ -23,14 +20,14 @@ def get_current_user(
     if not session_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail="Требуется авторизация.",
         )
 
     user_session = db.get(UserSession, session_token)
     if not user_session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail="Требуется авторизация.",
         )
 
     now = utc_now()
@@ -39,7 +36,7 @@ def get_current_user(
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session expired",
+            detail="Сессия истекла. Войдите снова.",
         )
 
     user = db.exec(select(User).where(User.id == user_session.user_id)).first()
@@ -48,7 +45,7 @@ def get_current_user(
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail="Требуется авторизация.",
         )
 
     return user

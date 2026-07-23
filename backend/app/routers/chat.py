@@ -19,6 +19,7 @@ from app.dependencies import get_current_user, utc_now
 from app.models.auth import User
 from app.models.chat import Chat, ChatTurnRequest, Message
 from app.routers.chats import _get_owned_chat, touch_chat_title
+from app.services.behavior_profiles import build_system_prompt, get_profile_for_chat
 
 
 router = APIRouter()
@@ -35,10 +36,7 @@ def _ordered_messages(db: Session, chat_id: int) -> list[dict]:
         .where(Message.chat_id == chat_id)
         .order_by(Message.created_at, Message.id)
     ).all()
-    return [
-        {"role": row.role, "content": row.content}
-        for row in rows
-    ]
+    return [{"role": row.role, "content": row.content} for row in rows if row.role in {"user", "assistant"}]
 
 
 @router.post("/chat")
@@ -51,6 +49,8 @@ async def chat(
     chat = _get_owned_chat(db, payload.chat_id, current_user.id)
     client = request.app.state.ollama_client
     model_manager = request.app.state.model_manager
+    profile = get_profile_for_chat(db, chat)
+    system_prompt = build_system_prompt(profile)
 
     async def stream():
         assistant_message: Message | None = None
@@ -71,7 +71,7 @@ async def chat(
                 db.commit()
                 db.refresh(chat)
 
-                request_messages = _ordered_messages(db, chat.id)
+                request_messages = [{"role": "system", "content": system_prompt}] + _ordered_messages(db, chat.id)
                 think = payload.mode == "thinking"
 
                 async with client.stream_chat(generation_model, request_messages, think) as response:
@@ -100,11 +100,11 @@ async def chat(
             except (OllamaUnavailableError, OllamaTimeoutError, OllamaResponseError) as exc:
                 logger.warning("Chat stream failed: %s", exc)
                 if not await request.is_disconnected():
-                    message = "Ollama is unavailable"
+                    message = "Ollama недоступна."
                     if isinstance(exc, OllamaTimeoutError):
-                        message = "Ollama chat timed out"
+                        message = "Истекло время ожидания ответа Ollama."
                     elif isinstance(exc, OllamaResponseError):
-                        message = "Ollama returned an error response"
+                        message = "Ollama вернула ошибочный ответ."
                     yield _ndjson_event({"type": "error", "message": message})
             except OllamaModelNotFoundError as exc:
                 logger.warning("Active model is unavailable: %s", exc)
@@ -115,6 +115,6 @@ async def chat(
             except Exception:
                 logger.exception("Unexpected chat error")
                 if not await request.is_disconnected():
-                    yield _ndjson_event({"type": "error", "message": "Unexpected chat error"})
+                    yield _ndjson_event({"type": "error", "message": "Непредвиденная ошибка при отправке сообщения."})
 
     return StreamingResponse(stream(), media_type="application/x-ndjson")

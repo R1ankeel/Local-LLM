@@ -1,11 +1,11 @@
-<template>
+﻿<template>
   <section ref="scrollContainer" class="message-list" @scroll="handleScroll">
     <div v-if="showEmptyState" class="empty-state">
-      <p class="empty-kicker">Ready for the first message</p>
-      <h2>This chat is empty for now</h2>
+      <p class="empty-kicker">Готово к первому сообщению</p>
+      <h2>Пока здесь пусто</h2>
       <p>
-        Pick a mode, write a message, and send it. The response from Ollama arrives as a stream
-        and is saved in the current chat.
+        Выберите режим, напишите сообщение и отправьте его. Ответ от Ollama приходит потоком и
+        сохраняется в текущем чате.
       </p>
     </div>
 
@@ -39,9 +39,9 @@ const stickToBottom = ref(true)
 const showEmptyState = computed(() => props.messages.length === 0)
 
 function roleLabel(role) {
-  if (role === 'assistant') return 'Assistant'
-  if (role === 'system') return 'System'
-  return 'You'
+  if (role === 'assistant') return 'Ассистент'
+  if (role === 'system') return 'Система'
+  return 'Вы'
 }
 
 function scrollToBottom(force = false) {

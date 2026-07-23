@@ -48,9 +48,9 @@ class ModelManager:
     async def switch_active_model(self, next_model: str) -> str:
         async with self._state_condition:
             if self._switching:
-                raise ActiveModelSwitchInProgressError("Model switch already in progress")
+                raise ActiveModelSwitchInProgressError("Переключение модели уже выполняется.")
             if self._active_generations > 0:
-                raise ActiveModelBusyError("Cannot switch active model while generation is running")
+                raise ActiveModelBusyError("Нельзя переключить активную модель, пока идёт генерация.")
             self._switching = True
 
         try:

@@ -1,5 +1,6 @@
-import { computed, ref } from 'vue'
+﻿import { computed, ref } from 'vue'
 import { getJson, postJson } from '../api/http.js'
+import { toUserErrorMessage } from '../utils/errors.js'
 
 const currentUser = ref(null)
 const status = ref('idle')
@@ -8,10 +9,10 @@ let loadPromise = null
 
 function normalizeAuthError(err) {
   if (err instanceof Error && typeof err.status === 'number' && err.status !== 401) {
-    return err.message
+    return toUserErrorMessage(err)
   }
 
-  return err instanceof Error ? err.message : 'Authorization failed'
+  return toUserErrorMessage(err, 'Не удалось выполнить авторизацию.')
 }
 
 async function loadCurrentUser() {

@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   color-scheme: light;
   --bg: #f4efe7;
   --bg-accent: #dce7e2;
@@ -48,10 +48,13 @@ button,
 input,
 textarea {
   font: inherit;
+  line-height: 1.2;
 }
 
 button {
   border: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .sr-only {
@@ -101,6 +104,7 @@ button {
 .empty-state h2 {
   margin: 0;
   line-height: 1.08;
+  overflow-wrap: anywhere;
 }
 
 .brand-title {
@@ -123,6 +127,7 @@ button {
   color: var(--accent-strong);
   cursor: pointer;
   transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+  text-wrap: balance;
 }
 
 .header-button:hover {
@@ -189,6 +194,12 @@ button {
   justify-content: space-between;
   gap: 0.75rem;
   align-items: start;
+}
+
+.chat-meta-inline {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 
 .sidebar-actions,
@@ -270,6 +281,158 @@ button {
   color: var(--danger);
   text-decoration: underline;
   cursor: pointer;
+}
+
+.profile-panel {
+  display: grid;
+  gap: 0.9rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.profile-selector,
+.profile-selector-inline {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.profile-selector span,
+.profile-selector-inline span,
+.profile-form-head p,
+.profile-note {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.profile-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.profile-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-strong);
+}
+
+.profile-card.active {
+  border-color: rgba(30, 111, 140, 0.34);
+  background: rgba(30, 111, 140, 0.06);
+}
+
+.profile-card-main {
+  display: grid;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+.profile-card-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.profile-card-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.profile-card-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.profile-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.profile-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(30, 111, 140, 0.12);
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.link-button.danger {
+  color: var(--danger);
+}
+
+.profile-form {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-strong);
+}
+
+.profile-form-head {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.profile-form-head h3 {
+  margin: 0.15rem 0 0;
+}
+
+.profile-textarea {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  color: var(--text);
+  background: #fff;
+  outline: none;
+  overflow: auto;
+  line-height: 1.45;
+}
+
+.profile-textarea:focus {
+  border-color: rgba(30, 111, 140, 0.45);
+  box-shadow: 0 0 0 4px rgba(30, 111, 140, 0.12);
+}
+
+.profile-default-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+}
+
+.profile-note {
+  margin: 0;
+}
+
+.profile-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: end;
 }
 
 .chat-shell {
@@ -631,6 +794,10 @@ button {
     flex-direction: column;
   }
 
+  .chat-meta-inline {
+    margin-top: 0.1rem;
+  }
+
   .sidebar-actions,
   .chat-actions {
     width: 100%;
@@ -642,6 +809,22 @@ button {
     width: 100%;
     max-width: none;
     flex-basis: 100%;
+  }
+
+  .profile-selector-inline {
+    width: 100%;
+  }
+
+  .profile-form-actions {
+    justify-content: stretch;
+  }
+
+  .profile-card-actions {
+    justify-content: stretch;
+  }
+
+  .link-button {
+    text-align: left;
   }
 
   .sidebar-action {
@@ -667,3 +850,4 @@ button {
     margin: 0;
   }
 }
+

@@ -1,5 +1,6 @@
-import { computed, ref } from 'vue'
-import { deleteJson, getJson, postJson } from '../api/http.js'
+﻿import { computed, ref } from 'vue'
+import { deleteJson, getJson, patchJson, postJson } from '../api/http.js'
+import { toUserErrorMessage } from '../utils/errors.js'
 
 const chats = ref([])
 const currentChat = ref(null)
@@ -44,7 +45,7 @@ async function refreshChats() {
   } catch (err) {
     chats.value = []
     status.value = 'error'
-    error.value = err instanceof Error ? err.message : 'Unknown error'
+    error.value = toUserErrorMessage(err)
     throw err
   }
 }
@@ -54,6 +55,19 @@ async function createChat(payload = {}) {
   upsertChatSummary(chat)
   currentChat.value = chat
   currentMessages.value = []
+  return chat
+}
+
+async function updateChatProfile(chatId, profileId) {
+  const chat = await patchJson(`/chats/${chatId}`, {
+    profile_id: profileId,
+  })
+  upsertChatSummary(chat)
+
+  if (currentChat.value?.id === chatId) {
+    currentChat.value = chat
+  }
+
   return chat
 }
 
@@ -71,7 +85,7 @@ async function loadChat(chatId) {
   } catch (err) {
     clearCurrentChat()
     status.value = 'error'
-    error.value = err instanceof Error ? err.message : 'Unknown error'
+    error.value = toUserErrorMessage(err)
     throw err
   }
 }
@@ -89,7 +103,7 @@ function setCurrentMessages(messages) {
   currentMessages.value = messages
 }
 
-const currentChatTitle = computed(() => currentChat.value?.title || 'New chat')
+const currentChatTitle = computed(() => currentChat.value?.title || 'Новый чат')
 
 export function useChats() {
   return {
@@ -102,6 +116,7 @@ export function useChats() {
     deleteChat,
     error,
     loadChat,
+    updateChatProfile,
     refreshChats,
     resetChats,
     setCurrentMessages,
