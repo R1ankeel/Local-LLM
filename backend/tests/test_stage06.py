@@ -99,6 +99,7 @@ class BackendHarness:
         self.chat_route = None
         self.behavior = None
         self.chat_models = None
+        self.memory = None
         self.security = None
         self.model_manager = None
         self._load()
@@ -133,6 +134,7 @@ class BackendHarness:
         self.chat_route = importlib.import_module("app.routers.chat")
         self.behavior = importlib.import_module("app.models.behavior_profile")
         self.chat_models = importlib.import_module("app.models.chat")
+        self.memory = importlib.import_module("app.models.memory")
         self.security = importlib.import_module("app.core.security")
         self.model_manager = importlib.import_module("app.services.model_manager")
 
@@ -194,6 +196,18 @@ class BackendHarness:
             db.commit()
             db.refresh(chat)
             return chat
+
+    def insert_memory(self, user_id: int, content: str, is_active: bool = True):
+        with Session(self.db.engine) as db:
+            memory = self.memory.MemoryItem(
+                user_id=user_id,
+                content=content,
+                is_active=is_active,
+            )
+            db.add(memory)
+            db.commit()
+            db.refresh(memory)
+            return memory
 
     def get_user(self, user_id: int):
         with Session(self.db.engine) as db:

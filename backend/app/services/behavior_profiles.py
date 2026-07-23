@@ -10,13 +10,20 @@ from app.core.prompts import (
 )
 from app.core.time import utc_now
 from app.models.behavior_profile import BehaviorProfile
+from app.services.memories import build_memory_prompt
 
 
 def build_system_prompt(
     profile: BehaviorProfile | None,
     context_summary: str | None = None,
+    memories: list | None = None,
 ) -> str:
     sections = [BASE_SYSTEM_PROMPT]
+
+    if memories:
+        memory_block = build_memory_prompt(memories)
+        if memory_block:
+            sections.append(memory_block)
 
     if context_summary and context_summary.strip():
         sections.append(

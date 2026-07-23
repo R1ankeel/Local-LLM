@@ -22,6 +22,7 @@ from app.models.chat import Chat, ChatTurnRequest, Message
 from app.routers.chats import _get_owned_chat, touch_chat_title
 from app.services.chat_summaries import SUMMARY_BATCH_SIZE, generate_context_summary
 from app.services.behavior_profiles import build_system_prompt, get_profile_for_chat
+from app.services.memories import list_memories
 
 
 router = APIRouter()
@@ -143,7 +144,8 @@ async def chat(
                 db.commit()
                 db.refresh(chat)
 
-                system_prompt = build_system_prompt(profile, chat.context_summary)
+                memories = list_memories(db, current_user.id)
+                system_prompt = build_system_prompt(profile, chat.context_summary, memories)
                 request_messages = [{"role": "system", "content": system_prompt}] + _limited_messages(db, chat)
                 think = payload.mode == "thinking"
 

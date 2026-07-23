@@ -19,6 +19,7 @@ from app.routers.chat import router as chat_router
 from app.routers.chats import router as chats_router
 from app.routers.health import router as health_router
 from app.routers.models import router as models_router
+from app.routers.memories import router as memories_router
 from app.routers.profiles import router as profiles_router
 from app.services.model_manager import ModelManager
 
@@ -57,6 +58,7 @@ app = FastAPI(title='Локальный чат с ИИ', version='0.4.1', lifesp
 app.include_router(health_router, prefix='/api', tags=['health'])
 app.include_router(auth_router, prefix='/api', tags=['auth'])
 app.include_router(chats_router, prefix='/api', tags=['chats'])
+app.include_router(memories_router, prefix='/api', tags=['memories'])
 app.include_router(profiles_router, prefix='/api', tags=['profiles'])
 app.include_router(models_router, prefix='/api', tags=['models'])
 app.include_router(chat_router, prefix='/api', tags=['chat'])

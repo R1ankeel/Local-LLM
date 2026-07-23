@@ -9,6 +9,7 @@ from app.core.config import DATABASE_PATH
 from app.core.time import utc_now
 from app.models.behavior_profile import BehaviorProfile
 from app.models.chat import Chat
+from app.models.memory import MemoryItem
 from app.services.behavior_profiles import ensure_default_profile
 
 
@@ -35,6 +36,15 @@ def _ensure_sqlite_indexes() -> None:
         )
         connection.execute(
             text("CREATE INDEX IF NOT EXISTS ix_chats_profile_id ON chats (profile_id)")
+        )
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_memory_items_user_id ON memory_items (user_id)")
+        )
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_memory_items_is_active ON memory_items (is_active)")
+        )
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_memory_items_updated_at ON memory_items (updated_at)")
         )
 
 
@@ -131,6 +141,22 @@ def _backfill_behavior_profiles() -> None:
             session.commit()
 
 
+def _prune_orphan_memory_items() -> None:
+    with Session(engine) as session:
+        memory_items = session.exec(select(MemoryItem)).all()
+        changed = False
+        for memory in memory_items:
+            user_exists = session.exec(
+                text("SELECT 1 FROM users WHERE id = :user_id"),
+                params={"user_id": memory.user_id},
+            ).first()
+            if user_exists is None:
+                session.delete(memory)
+                changed = True
+        if changed:
+            session.commit()
+
+
 def init_db() -> None:
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
     SQLModel.metadata.create_all(engine)
@@ -140,6 +166,7 @@ def init_db() -> None:
     _ensure_message_is_complete_column()
     _ensure_sqlite_indexes()
     _backfill_behavior_profiles()
+    _prune_orphan_memory_items()
 
 
 def get_db() -> Generator[Session, None, None]:
