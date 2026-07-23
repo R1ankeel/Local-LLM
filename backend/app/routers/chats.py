@@ -56,6 +56,7 @@ def _chat_to_read(db: Session, chat: Chat) -> ChatRead:
         id=chat.id,
         title=chat.title,
         profile_id=chat.profile_id if chat.profile_id is not None else profile.id,
+        context_message_limit=chat.context_message_limit,
         profile=BehaviorProfileSummary.model_validate(profile),
         created_at=chat.created_at,
         updated_at=chat.updated_at,
@@ -99,6 +100,7 @@ def create_chat(
     chat = Chat(
         user_id=current_user.id,
         profile_id=profile.id,
+        context_message_limit=payload.context_message_limit if payload else 40,
         title=_normalize_title(payload.title if payload else None),
     )
     db.add(chat)
@@ -127,16 +129,28 @@ def update_chat(
 ):
     chat = _get_owned_chat(db, chat_id, current_user.id)
 
-    if payload.profile_id is None:
-        profile = ensure_default_profile(db, current_user.id)
-    else:
-        profile = _get_owned_profile(db, payload.profile_id, current_user.id)
+    changed = False
 
-    chat.profile_id = profile.id
-    chat.updated_at = utc_now()
-    db.add(chat)
-    db.commit()
-    db.refresh(chat)
+    if "profile_id" in payload.model_fields_set:
+        if payload.profile_id is None:
+            profile = ensure_default_profile(db, current_user.id)
+        else:
+            profile = _get_owned_profile(db, payload.profile_id, current_user.id)
+
+        if chat.profile_id != profile.id:
+            chat.profile_id = profile.id
+            changed = True
+
+    if "context_message_limit" in payload.model_fields_set and payload.context_message_limit is not None:
+        if chat.context_message_limit != payload.context_message_limit:
+            chat.context_message_limit = payload.context_message_limit
+            changed = True
+
+    if changed:
+        chat.updated_at = utc_now()
+        db.add(chat)
+        db.commit()
+        db.refresh(chat)
     return _chat_to_read(db, chat)
 
 

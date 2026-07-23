@@ -47,8 +47,28 @@ def _ensure_chat_profile_column() -> None:
                 text(
                     "ALTER TABLE chats ADD COLUMN profile_id INTEGER "
                     "REFERENCES behavior_profiles(id)"
+                    )
+                )
+
+
+def _ensure_chat_context_message_limit_column() -> None:
+    with engine.begin() as connection:
+        inspector = inspect(connection)
+        chat_columns = {column["name"] for column in inspector.get_columns("chats")}
+        if "context_message_limit" not in chat_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE chats ADD COLUMN context_message_limit INTEGER "
+                    "NOT NULL DEFAULT 40"
                 )
             )
+        connection.execute(
+            text(
+                "UPDATE chats "
+                "SET context_message_limit = 40 "
+                "WHERE context_message_limit IS NULL"
+            )
+        )
 
 
 def _backfill_behavior_profiles() -> None:
@@ -79,6 +99,7 @@ def init_db() -> None:
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
     SQLModel.metadata.create_all(engine)
     _ensure_chat_profile_column()
+    _ensure_chat_context_message_limit_column()
     _ensure_sqlite_indexes()
     _backfill_behavior_profiles()
 

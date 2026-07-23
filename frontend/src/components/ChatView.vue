@@ -182,9 +182,25 @@
                 </option>
               </select>
             </label>
+
+            <label v-if="currentChat" class="profile-selector-inline context-selector">
+              <span>Глубина контекста</span>
+              <input
+                v-model="currentChatContextMessageLimit"
+                class="model-selector context-limit-input"
+                type="number"
+                min="10"
+                max="100"
+                step="1"
+                :disabled="isGenerating"
+                @change="handleCurrentContextLimitChange"
+              />
+              <span class="selector-help">Количество последних сообщений, передаваемых модели.</span>
+            </label>
           </div>
         </div>
 
+        <p v-if="chatSettingsError" class="stream-error" role="alert">{{ chatSettingsError }}</p>
         <p v-if="modelNotice" class="stream-error" role="alert">{{ modelNotice }}</p>
 
         <MessageList :messages="currentMessages" />
@@ -234,9 +250,11 @@ const mode = ref('instant')
 const isSidebarOpen = ref(false)
 const newChatProfileId = ref(null)
 const currentChatProfileId = ref(null)
+const currentChatContextMessageLimit = ref('')
 const editingProfileId = ref(null)
 const profileForm = ref(blankProfileForm())
 const profileActionError = ref('')
+const chatSettingsError = ref('')
 const profileSaving = ref(false)
 
 const router = useRouter()
@@ -256,6 +274,7 @@ const {
   loadChat,
   refreshChats,
   resetChats,
+  updateChatContextMessageLimit,
   updateChatProfile,
 } = useChats()
 const {
@@ -331,6 +350,19 @@ function normalizeProfileId(value) {
 
   const parsed = Number(value)
   return Number.isNaN(parsed) ? null : parsed
+}
+
+function normalizeContextMessageLimit(value) {
+  if (value === '' || value === null || value === undefined) {
+    return null
+  }
+
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed)) {
+    return null
+  }
+
+  return parsed
 }
 
 function formatChatDate(value) {
@@ -453,6 +485,29 @@ async function handleCurrentProfileChange(event) {
   } catch (err) {
     currentChatProfileId.value = currentChat.value?.profile_id ?? null
     profileActionError.value = err instanceof Error ? err.message : 'Не удалось обновить профиль чата.'
+  }
+}
+
+async function handleCurrentContextLimitChange() {
+  if (!currentChat.value?.id || isGenerating.value) {
+    return
+  }
+
+  const limit = normalizeContextMessageLimit(currentChatContextMessageLimit.value)
+  if (limit === null || limit < 10 || limit > 100) {
+    chatSettingsError.value = 'Введите число от 10 до 100.'
+    currentChatContextMessageLimit.value = String(currentChat.value?.context_message_limit ?? 40)
+    return
+  }
+
+  chatSettingsError.value = ''
+
+  try {
+    const updated = await updateChatContextMessageLimit(currentChat.value.id, limit)
+    currentChatContextMessageLimit.value = String(updated.context_message_limit)
+  } catch (err) {
+    currentChatContextMessageLimit.value = String(currentChat.value?.context_message_limit ?? 40)
+    chatSettingsError.value = err instanceof Error ? err.message : 'Не удалось обновить глубину контекста.'
   }
 }
 
@@ -624,7 +679,9 @@ async function handleLogout() {
   startNewProfile()
   newChatProfileId.value = null
   currentChatProfileId.value = null
+  currentChatContextMessageLimit.value = ''
   composerText.value = ''
+  chatSettingsError.value = ''
   await logout()
   await router.push({ name: 'login' })
 }
@@ -649,6 +706,22 @@ watch(
   () => currentChat.value?.profile_id,
   (profileId) => {
     currentChatProfileId.value = profileId ?? null
+  },
+  { immediate: true },
+)
+
+watch(
+  () => currentChat.value?.id,
+  () => {
+    chatSettingsError.value = ''
+  },
+  { immediate: true },
+)
+
+watch(
+  () => currentChat.value?.context_message_limit,
+  (limit) => {
+    currentChatContextMessageLimit.value = limit !== undefined && limit !== null ? String(limit) : ''
   },
   { immediate: true },
 )

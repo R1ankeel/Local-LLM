@@ -168,12 +168,19 @@ class BackendHarness:
             db.refresh(profile)
             return profile
 
-    def insert_chat(self, owner_id: int, title: str, profile_id: int | None = None):
+    def insert_chat(
+        self,
+        owner_id: int,
+        title: str,
+        profile_id: int | None = None,
+        context_message_limit: int = 40,
+    ):
         with Session(self.db.engine) as db:
             chat = self.chat_models.Chat(
                 user_id=owner_id,
                 profile_id=profile_id,
                 title=title,
+                context_message_limit=context_message_limit,
             )
             db.add(chat)
             db.commit()
@@ -331,6 +338,7 @@ class Stage06Tests(unittest.TestCase):
         self.assertEqual(len(chats.json()), 1)
         chat_summary = chats.json()[0]
         self.assertIsNotNone(chat_summary["profile_id"])
+        self.assertEqual(chat_summary["context_message_limit"], 40)
         self.assertEqual(len(client.get(f"/api/chats/{chat_summary['id']}").json()["messages"]), 1)
 
     def test_profile_isolation_validation_and_default_switch(self) -> None:
@@ -422,6 +430,66 @@ class Stage06Tests(unittest.TestCase):
         ).json()
         client.post("/api/chats", json={"profile_id": used_profile["id"]})
         self.assertEqual(client.delete(f"/api/profiles/{used_profile['id']}").status_code, 409)
+
+    def test_chat_context_message_limit_round_trip_and_history_window(self) -> None:
+        client = self.harness.client
+        assert client is not None
+
+        alice = self.harness.create_user("alice", "secret")
+        self.harness.login("alice", "secret")
+
+        created = client.post("/api/chats", json={"context_message_limit": 10})
+        self.assertEqual(created.status_code, 201)
+        chat = created.json()
+        self.assertEqual(chat["context_message_limit"], 10)
+
+        self.assertEqual(client.patch(f"/api/chats/{chat['id']}", json={"context_message_limit": 9}).status_code, 422)
+        self.assertEqual(client.patch(f"/api/chats/{chat['id']}", json={"context_message_limit": 101}).status_code, 422)
+
+        updated = client.patch(f"/api/chats/{chat['id']}", json={"context_message_limit": 11})
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()["context_message_limit"], 11)
+        self.assertEqual(client.get(f"/api/chats/{chat['id']}").json()["context_message_limit"], 11)
+
+        restored = client.patch(f"/api/chats/{chat['id']}", json={"context_message_limit": 10})
+        self.assertEqual(restored.status_code, 200)
+        self.assertEqual(restored.json()["context_message_limit"], 10)
+
+        fake_client = self.harness.main.app.state.ollama_client
+        fake_client.lines = [json.dumps({"message": {"content": "one"}, "done": True})]
+
+        for turn in range(1, 6):
+            asyncio.run(self.harness.run_chat(alice.id, chat["id"], f"turn {turn}"))
+
+        asyncio.run(self.harness.run_chat(alice.id, chat["id"], "turn 6"))
+
+        sixth_request = fake_client.captured_requests[-1]
+
+        self.assertEqual(
+            [message["role"] for message in sixth_request["messages"]],
+            ["system", "user", "assistant", "user", "assistant", "user", "assistant", "user", "assistant", "user"],
+        )
+        self.assertIn("turn 2", sixth_request["messages"][1]["content"])
+        self.assertNotIn("turn 1", json.dumps(sixth_request["messages"], ensure_ascii=False))
+
+        messages = self.harness.query_messages(chat["id"])
+        self.assertEqual(
+            [message.role for message in messages],
+            [
+                "user",
+                "assistant",
+                "user",
+                "assistant",
+                "user",
+                "assistant",
+                "user",
+                "assistant",
+                "user",
+                "assistant",
+                "user",
+                "assistant",
+            ],
+        )
 
     def test_stream_prompt_partial_response_and_lock_release(self) -> None:
         client = self.harness.client

@@ -26,6 +26,7 @@ class Chat(SQLModel, table=True):
         index=True,
         nullable=True,
     )
+    context_message_limit: int = SQLField(default=40, nullable=False)
     title: str = SQLField(sa_column=Column(String(120), nullable=False))
     created_at: datetime = SQLField(
         sa_column=Column(DateTime(timezone=False), nullable=False),
@@ -55,6 +56,7 @@ class ChatCreateRequest(BaseModel):
 
     title: str | None = Field(default=None, max_length=120)
     profile_id: int | None = Field(default=None, gt=0)
+    context_message_limit: int = Field(default=40, ge=10, le=100)
 
     @field_validator("profile_id")
     @classmethod
@@ -68,6 +70,7 @@ class ChatUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     profile_id: int | None = Field(default=None)
+    context_message_limit: int | None = Field(default=None, ge=10, le=100)
 
     @field_validator("profile_id")
     @classmethod
@@ -108,6 +111,7 @@ class ChatRead(BaseModel):
     id: int
     title: str
     profile_id: int | None
+    context_message_limit: int
     profile: BehaviorProfileSummary | None = None
     created_at: datetime
     updated_at: datetime

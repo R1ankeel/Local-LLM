@@ -71,6 +71,19 @@ async function updateChatProfile(chatId, profileId) {
   return chat
 }
 
+async function updateChatContextMessageLimit(chatId, contextMessageLimit) {
+  const chat = await patchJson(`/chats/${chatId}`, {
+    context_message_limit: contextMessageLimit,
+  })
+  upsertChatSummary(chat)
+
+  if (currentChat.value?.id === chatId) {
+    currentChat.value = chat
+  }
+
+  return chat
+}
+
 async function loadChat(chatId) {
   status.value = 'loading'
   error.value = ''
@@ -117,6 +130,7 @@ export function useChats() {
     error,
     loadChat,
     updateChatProfile,
+    updateChatContextMessageLimit,
     refreshChats,
     resetChats,
     setCurrentMessages,

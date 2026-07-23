@@ -39,6 +39,17 @@ def _ordered_messages(db: Session, chat_id: int) -> list[dict]:
     return [{"role": row.role, "content": row.content} for row in rows if row.role in {"user", "assistant"}]
 
 
+def _limited_messages(db: Session, chat: Chat) -> list[dict]:
+    messages = _ordered_messages(db, chat.id)
+    if chat.context_message_limit <= 0:
+        return []
+
+    selected = messages[-chat.context_message_limit :]
+    while selected and selected[0]["role"] == "assistant":
+        selected = selected[1:]
+    return selected
+
+
 @router.post("/chat")
 async def chat(
     request: Request,
@@ -71,7 +82,7 @@ async def chat(
                 db.commit()
                 db.refresh(chat)
 
-                request_messages = [{"role": "system", "content": system_prompt}] + _ordered_messages(db, chat.id)
+                request_messages = [{"role": "system", "content": system_prompt}] + _limited_messages(db, chat)
                 think = payload.mode == "thinking"
 
                 async with client.stream_chat(generation_model, request_messages, think) as response:
