@@ -7,6 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 
 from app.clients.ollama import OllamaClient
+from app.clients.duckduckgo import DuckDuckGoClient
+from app.clients.xai import XAIWebSearchClient
 from app.core.config import (
     FRONTEND_DIST_PATH,
     OLLAMA_BASE_URL,
@@ -18,6 +20,7 @@ from app.routers.auth import router as auth_router
 from app.routers.chat import router as chat_router
 from app.routers.chats import router as chats_router
 from app.routers.health import router as health_router
+from app.routers.memory_candidates import router as memory_candidates_router
 from app.routers.models import router as models_router
 from app.routers.memories import router as memories_router
 from app.routers.profiles import router as profiles_router
@@ -47,17 +50,23 @@ class SPAStaticFiles(StaticFiles):
 async def lifespan(app: FastAPI):
     init_db()
     app.state.ollama_client = OllamaClient(OLLAMA_BASE_URL, OLLAMA_DEFAULT_MODEL)
+    app.state.web_search_client = DuckDuckGoClient()
+    app.state.xai_web_search_client = XAIWebSearchClient()
     app.state.model_manager = ModelManager(app.state.ollama_client, OLLAMA_DEFAULT_MODEL)
+    app.state.active_chat_generations = set()
     try:
         yield
     finally:
         await app.state.ollama_client.aclose()
+        await app.state.web_search_client.aclose()
+        await app.state.xai_web_search_client.aclose()
 
 
 app = FastAPI(title='Локальный чат с ИИ', version='0.4.1', lifespan=lifespan)
 app.include_router(health_router, prefix='/api', tags=['health'])
 app.include_router(auth_router, prefix='/api', tags=['auth'])
 app.include_router(chats_router, prefix='/api', tags=['chats'])
+app.include_router(memory_candidates_router, prefix='/api', tags=['memory-candidates'])
 app.include_router(memories_router, prefix='/api', tags=['memories'])
 app.include_router(profiles_router, prefix='/api', tags=['profiles'])
 app.include_router(models_router, prefix='/api', tags=['models'])

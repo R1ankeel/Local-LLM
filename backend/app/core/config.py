@@ -22,6 +22,10 @@ OLLAMA_DEFAULT_MODEL = os.getenv(
     "OLLAMA_DEFAULT_MODEL",
     os.getenv("OLLAMA_MODEL", "VladimirGav/gemma4-26b-16GB-VRAM:latest"),
 )
+WEB_SEARCH_PROVIDER = os.getenv("WEB_SEARCH_PROVIDER", "duckduckgo").strip().lower()
+XAI_API_KEY = os.getenv("XAI_API_KEY", "").strip()
+XAI_MODEL = os.getenv("XAI_MODEL", "grok-4.5").strip()
+XAI_TIMEOUT_SECONDS = float(os.getenv("XAI_TIMEOUT_SECONDS", "30"))
 SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "true").lower() == "true"
 FRONTEND_DIST_PATH = _resolve_path(
     os.getenv("FRONTEND_DIST_PATH", "frontend/dist"),

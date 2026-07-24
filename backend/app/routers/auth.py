@@ -10,8 +10,15 @@ from app.core.time import utc_now
 from app.core.security import generate_session_token, hash_password, verify_password
 from app.db import get_db
 from app.dependencies import get_current_user
-from app.models.auth import LoginRequest, Session as UserSession, User, UserPublic
+from app.models.auth import (
+    LoginRequest,
+    Session as UserSession,
+    User,
+    UserPublic,
+    UserSettingsUpdate,
+)
 from app.services.behavior_profiles import ensure_default_profile
+from app.services.web_search import WebSearchProviderConfigError, resolve_web_search_provider
 
 
 router = APIRouter(prefix="/auth")
@@ -75,12 +82,47 @@ def me(current_user: User = Depends(get_current_user)):
     return to_public_user(current_user)
 
 
+@router.patch("/me", response_model=UserPublic)
+def update_me(
+    payload: UserSettingsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    changed = False
+
+    if "web_search_mode" in payload.model_fields_set and current_user.web_search_mode != payload.web_search_mode:
+        current_user.web_search_mode = payload.web_search_mode
+        changed = True
+
+    if (
+        "web_search_provider" in payload.model_fields_set
+        and current_user.web_search_provider != payload.web_search_provider
+    ):
+        try:
+            resolved_provider = resolve_web_search_provider(payload.web_search_provider)
+        except WebSearchProviderConfigError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        current_user.web_search_provider = resolved_provider
+        changed = True
+
+    if changed:
+        db.add(current_user)
+        db.commit()
+        db.refresh(current_user)
+
+    return to_public_user(current_user)
+
+
 def create_user(db: Session, username: str, password: str) -> User:
     existing_user = db.exec(select(User).where(User.username == username)).first()
     if existing_user:
         raise ValueError(f"Пользователь '{username}' уже существует")
 
-    user = User(username=username, password_hash=hash_password(password))
+    user = User(
+        username=username,
+        password_hash=hash_password(password),
+        web_search_provider="duckduckgo",
+    )
     db.add(user)
     db.commit()
     db.refresh(user)

@@ -9,10 +9,12 @@ from sqlmodel import Field as SQLField, SQLModel
 
 from app.core.time import utc_now
 from app.models.behavior_profile import BehaviorProfileSummary
+from app.models.web_search import MessageSourceRead
 
 
 ChatMode = Literal["instant", "thinking"]
 MessageRole = Literal["user", "assistant"]
+WebSearchMode = Literal["off", "auto", "always"]
 
 
 class Chat(SQLModel, table=True):
@@ -96,6 +98,8 @@ class ChatTurnRequest(BaseModel):
     chat_id: int = Field(gt=0)
     content: str = Field(min_length=1, max_length=8000)
     mode: ChatMode = "instant"
+    web_search_mode: WebSearchMode = "off"
+    use_web_search: bool | None = None
 
     @field_validator("content")
     @classmethod
@@ -114,6 +118,7 @@ class MessageRead(BaseModel):
     content: str
     is_complete: bool
     created_at: datetime
+    sources: list[MessageSourceRead] = Field(default_factory=list)
 
 
 class ChatRead(BaseModel):

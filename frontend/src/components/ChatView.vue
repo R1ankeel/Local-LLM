@@ -154,6 +154,8 @@
             </div>
           </form>
         </section>
+
+        <MemoryPanel :chat-id="currentChat?.id ?? null" />
       </aside>
 
       <section class="chat-shell">
@@ -212,6 +214,8 @@
         <ChatComposer
           v-model="composerText"
           v-model:mode="mode"
+          v-model:web-search-mode="webSearchMode"
+          v-model:web-search-provider="webSearchProvider"
           :disabled="isGenerating || healthStatus === 'loading' || !currentChat"
           :is-generating="isGenerating"
           placeholder="Введите сообщение и нажмите Enter"
@@ -229,6 +233,7 @@ import { useRoute, useRouter } from 'vue-router'
 import MainLayout from '../layouts/MainLayout.vue'
 import MessageList from './MessageList.vue'
 import ChatComposer from './ChatComposer.vue'
+import MemoryPanel from './MemoryPanel.vue'
 import { useHealth } from '../composables/useHealth.js'
 import { useChatStream } from '../composables/useChatStream.js'
 import { useAuth } from '../composables/useAuth.js'
@@ -247,6 +252,10 @@ function blankProfileForm() {
 
 const composerText = ref('')
 const mode = ref('instant')
+const webSearchMode = ref('off')
+const webSearchProvider = ref('duckduckgo')
+const syncingWebSearchMode = ref(false)
+const syncingWebSearchProvider = ref(false)
 const isSidebarOpen = ref(false)
 const newChatProfileId = ref(null)
 const currentChatProfileId = ref(null)
@@ -262,7 +271,7 @@ const route = useRoute()
 
 const { health, status: healthStatus, error: healthError, refreshHealth } = useHealth()
 const { isGenerating, error: streamError, sendChat, stop } = useChatStream()
-const { currentUser, logout } = useAuth()
+const { currentUser, logout, updateWebSearchMode, updateWebSearchProvider } = useAuth()
 const {
   chats,
   error: chatsError,
@@ -636,6 +645,7 @@ async function sendMessage() {
       chat_id: chatId,
       content: text,
       mode: mode.value,
+      web_search_mode: webSearchMode.value,
     },
     {
       onChunk(textValue) {
@@ -680,6 +690,7 @@ async function handleLogout() {
   newChatProfileId.value = null
   currentChatProfileId.value = null
   currentChatContextMessageLimit.value = ''
+  webSearchProvider.value = 'duckduckgo'
   composerText.value = ''
   chatSettingsError.value = ''
   await logout()
@@ -725,6 +736,82 @@ watch(
   },
   { immediate: true },
 )
+
+watch(
+  () => currentUser.value?.web_search_mode,
+  (mode) => {
+    const nextMode = mode || 'off'
+    if (webSearchMode.value === nextMode) {
+      return
+    }
+
+    syncingWebSearchMode.value = true
+    webSearchMode.value = nextMode
+    queueMicrotask(() => {
+      syncingWebSearchMode.value = false
+    })
+  },
+  { immediate: true },
+)
+
+watch(
+  () => currentUser.value?.web_search_provider,
+  (provider) => {
+    const nextProvider = provider || 'duckduckgo'
+    if (webSearchProvider.value === nextProvider) {
+      return
+    }
+
+    syncingWebSearchProvider.value = true
+    webSearchProvider.value = nextProvider
+    queueMicrotask(() => {
+      syncingWebSearchProvider.value = false
+    })
+  },
+  { immediate: true },
+)
+
+watch(webSearchMode, async (mode, previousMode) => {
+  if (syncingWebSearchMode.value || !currentUser.value || mode === previousMode) {
+    return
+  }
+
+  if (mode === currentUser.value.web_search_mode) {
+    return
+  }
+
+  try {
+    await updateWebSearchMode(mode)
+  } catch (err) {
+    syncingWebSearchMode.value = true
+    webSearchMode.value = currentUser.value?.web_search_mode || 'off'
+    queueMicrotask(() => {
+      syncingWebSearchMode.value = false
+    })
+    chatSettingsError.value = err instanceof Error ? err.message : 'Не удалось сохранить режим поиска.'
+  }
+})
+
+watch(webSearchProvider, async (provider, previousProvider) => {
+  if (syncingWebSearchProvider.value || !currentUser.value || provider === previousProvider) {
+    return
+  }
+
+  if (provider === currentUser.value.web_search_provider) {
+    return
+  }
+
+  try {
+    await updateWebSearchProvider(provider)
+  } catch (err) {
+    syncingWebSearchProvider.value = true
+    webSearchProvider.value = currentUser.value?.web_search_provider || 'duckduckgo'
+    queueMicrotask(() => {
+      syncingWebSearchProvider.value = false
+    })
+    chatSettingsError.value = err instanceof Error ? err.message : 'Не удалось сохранить источник поиска.'
+  }
+})
 
 watch(
   profiles,

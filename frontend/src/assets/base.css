@@ -186,6 +186,7 @@ button {
   background: var(--surface);
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
+  overflow-y: auto;
 }
 
 .sidebar-topline,
@@ -288,6 +289,22 @@ button {
   gap: 0.9rem;
   padding-top: 0.25rem;
   border-top: 1px solid var(--border);
+}
+
+.memory-panel {
+  display: grid;
+  gap: 0.9rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.candidate-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.candidate-title {
+  font-size: 1rem;
 }
 
 .profile-selector,
@@ -394,6 +411,12 @@ button {
   color: var(--danger);
 }
 
+.link-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  text-decoration: none;
+}
+
 .profile-form {
   display: grid;
   gap: 0.7rem;
@@ -447,6 +470,156 @@ button {
   flex-wrap: wrap;
   gap: 0.6rem;
   justify-content: end;
+}
+
+.memory-form {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-strong);
+}
+
+.memory-textarea {
+  min-height: 110px;
+}
+
+.memory-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: end;
+}
+
+.memory-status {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.memory-error-block {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.memory-empty {
+  min-height: auto;
+  padding: 1.1rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.memory-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.memory-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-strong);
+}
+
+.candidate-card {
+  border-style: dashed;
+}
+
+.candidate-card.candidate-pending {
+  border-color: rgba(30, 111, 140, 0.28);
+}
+
+.candidate-card.candidate-accepted {
+  border-color: rgba(31, 122, 77, 0.28);
+  background: rgba(31, 122, 77, 0.05);
+}
+
+.candidate-card.candidate-rejected {
+  border-color: rgba(92, 102, 112, 0.28);
+  background: rgba(92, 102, 112, 0.05);
+}
+
+.memory-card.inactive {
+  opacity: 0.82;
+  border-style: dashed;
+}
+
+.memory-card.editing {
+  border-color: rgba(30, 111, 140, 0.34);
+  background: rgba(30, 111, 140, 0.06);
+}
+
+.memory-card-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.memory-card-main {
+  min-width: 0;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.memory-card-title {
+  overflow-wrap: anywhere;
+}
+
+.memory-card-meta,
+.memory-edit-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.memory-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(30, 111, 140, 0.12);
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.memory-badge.inactive {
+  background: rgba(92, 102, 112, 0.12);
+  color: var(--muted);
+}
+
+.memory-badge.candidate-pending {
+  background: rgba(30, 111, 140, 0.12);
+  color: var(--accent-strong);
+}
+
+.memory-badge.candidate-accepted {
+  background: rgba(31, 122, 77, 0.12);
+  color: var(--ok);
+}
+
+.memory-badge.candidate-rejected {
+  background: rgba(92, 102, 112, 0.12);
+  color: var(--muted);
+}
+
+.memory-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.candidate-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
 
 .chat-shell {
@@ -515,6 +688,44 @@ button {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.message-sources {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.message-sources-title {
+  margin: 0 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.message-sources-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.message-source {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.message-source-link {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.message-source-snippet {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 
 .empty-state {
@@ -660,6 +871,12 @@ button {
   gap: 0.5rem;
 }
 
+.search-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .mode-chip,
 .send-button,
 .stop-button {
@@ -676,10 +893,21 @@ button {
   color: var(--text);
 }
 
+.search-chip {
+  background: rgba(31, 122, 77, 0.1);
+  border-color: rgba(31, 122, 77, 0.22);
+}
+
 .mode-chip.active {
   background: rgba(30, 111, 140, 0.14);
   border-color: rgba(30, 111, 140, 0.28);
   color: var(--accent-strong);
+}
+
+.search-chip.active {
+  background: rgba(31, 122, 77, 0.16);
+  border-color: rgba(31, 122, 77, 0.34);
+  color: var(--ok);
 }
 
 .send-button {
@@ -796,6 +1024,10 @@ button {
     width: 100%;
   }
 
+  .search-switch {
+    width: 100%;
+  }
+
   .mode-chip,
   .send-button,
   .stop-button {
@@ -843,6 +1075,20 @@ button {
 
   .profile-card-actions {
     justify-content: stretch;
+  }
+
+  .memory-form-actions,
+  .memory-card-actions {
+    justify-content: stretch;
+  }
+
+  .memory-error-block > .header-button {
+    width: 100%;
+  }
+
+  .memory-form-actions > *,
+  .memory-card-actions > * {
+    flex: 1 1 0;
   }
 
   .link-button {

@@ -7,6 +7,8 @@ from sqlalchemy import Column, DateTime, Index, String
 from sqlmodel import Field as SQLField, SQLModel
 
 from app.core.time import utc_now
+from app.models.chat import WebSearchMode
+from app.models.web_search import WebSearchProvider
 
 
 class User(SQLModel, table=True):
@@ -16,6 +18,14 @@ class User(SQLModel, table=True):
     id: int | None = SQLField(default=None, primary_key=True)
     username: str = SQLField(sa_column=Column(String(64), nullable=False))
     password_hash: str = SQLField(sa_column=Column(String(255), nullable=False))
+    web_search_mode: str = SQLField(
+        default="off",
+        sa_column=Column(String(8), nullable=False),
+    )
+    web_search_provider: str = SQLField(
+        default="duckduckgo",
+        sa_column=Column(String(16), nullable=False),
+    )
     created_at: datetime = SQLField(
         sa_column=Column(DateTime(timezone=False), nullable=False),
         default_factory=utc_now,
@@ -48,4 +58,16 @@ class UserPublic(BaseModel):
 
     id: int
     username: str
+    web_search_mode: WebSearchMode
+    web_search_provider: WebSearchProvider
     created_at: datetime
+
+
+class UserSettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    web_search_mode: WebSearchMode = Field(default="off")
+    web_search_provider: WebSearchProvider = Field(default="duckduckgo")
+
+
+UserWebSearchModeUpdate = UserSettingsUpdate

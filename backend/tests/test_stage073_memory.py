@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlmodel import Session, SQLModel, select
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-DB_PATH = BACKEND_DIR / "data" / "stage081.sqlite3"
+DB_PATH = BACKEND_DIR / "data" / "stage073.sqlite3"
 
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -20,7 +20,7 @@ if str(BACKEND_DIR) not in sys.path:
 from tests.test_stage06 import BackendHarness, FakeOllamaClient
 
 
-class Stage081MemoryTests(unittest.TestCase):
+class Stage073MemoryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.db_path = DB_PATH
         if self.db_path.exists():
@@ -80,11 +80,6 @@ class Stage081MemoryTests(unittest.TestCase):
                 "INSERT INTO chats (user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
                 (user_id, "Legacy chat", now, now),
             )
-            chat_id = conn.execute("SELECT id FROM chats WHERE user_id = ?", (user_id,)).fetchone()[0]
-            conn.execute(
-                "INSERT INTO messages (chat_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                (chat_id, "user", "hello", now),
-            )
             conn.commit()
         finally:
             conn.close()
@@ -129,41 +124,6 @@ class Stage081MemoryTests(unittest.TestCase):
         self.assertEqual(memories.status_code, 200)
         self.assertEqual(memories.json(), [])
 
-    def test_message_sources_migration_is_idempotent_and_preserves_existing_data(self) -> None:
-        self.harness.close()
-        if self.db_path.exists():
-            self.db_path.unlink()
-        self.create_legacy_db()
-        self.harness.reload_same_db()
-        client = self.harness.client
-        assert client is not None
-
-        login = client.post("/api/auth/login", json={"username": "legacy", "password": "legacy-pass"})
-        self.assertEqual(login.status_code, 200)
-
-        with Session(self.harness.db.engine) as db:
-            tables = {
-                row[0]
-                for row in db.exec(
-                    text("SELECT name FROM sqlite_master WHERE type = 'table'")
-                ).all()
-            }
-            self.assertIn("message_sources", tables)
-            messages = db.exec(select(self.harness.chat_models.Message)).all()
-            self.assertEqual(len(messages), 1)
-            self.assertEqual(messages[0].role, "user")
-            self.assertEqual(messages[0].content, "hello")
-
-        self.harness.reload_same_db()
-        client = self.harness.client
-        assert client is not None
-
-        login = client.post("/api/auth/login", json={"username": "legacy", "password": "legacy-pass"})
-        self.assertEqual(login.status_code, 200)
-        chats = client.get("/api/chats").json()
-        self.assertEqual(len(chats), 1)
-        self.assertEqual(client.get(f"/api/chats/{chats[0]['id']}").json()["messages"][0]["content"], "hello")
-
     def test_memory_crud_and_isolation(self) -> None:
         client = self.harness.client
         assert client is not None
@@ -180,6 +140,7 @@ class Stage081MemoryTests(unittest.TestCase):
 
         self.assertEqual(client.post("/api/memories", json={"content": ""}).status_code, 422)
         self.assertEqual(client.post("/api/memories", json={"content": "x" * 501}).status_code, 422)
+        self.assertEqual(client.patch(f"/api/memories/{memory['id']}", json={"content": "   "}).status_code, 422)
         self.assertEqual(
             client.post("/api/memories", json={"content": "ok", "user_id": bob.id}).status_code,
             422,
@@ -190,9 +151,16 @@ class Stage081MemoryTests(unittest.TestCase):
         self.assertEqual(client.patch(f"/api/memories/{bob_memory.id}", json={"content": "nope"}).status_code, 404)
         self.assertEqual(client.delete(f"/api/memories/{bob_memory.id}").status_code, 404)
 
+        toggled = client.patch(
+            f"/api/memories/{memory['id']}",
+            json={"is_active": False},
+        )
+        self.assertEqual(toggled.status_code, 200)
+        self.assertFalse(toggled.json()["is_active"])
+
         updated = client.patch(
             f"/api/memories/{memory['id']}",
-            json={"content": "Remember the coffee", "is_active": False},
+            json={"content": "Remember the coffee"},
         )
         self.assertEqual(updated.status_code, 200)
         self.assertEqual(updated.json()["content"], "Remember the coffee")

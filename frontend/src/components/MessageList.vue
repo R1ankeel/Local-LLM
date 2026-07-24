@@ -18,6 +18,17 @@
       >
         <p class="message-role">{{ roleLabel(message.role) }}</p>
         <p class="message-content">{{ message.content }}</p>
+        <div v-if="message.sources?.length" class="message-sources">
+          <p class="message-sources-title">Sources</p>
+          <ol class="message-sources-list">
+            <li v-for="source in message.sources" :key="source.id" class="message-source">
+              <a class="message-source-link" :href="source.url" target="_blank" rel="noopener noreferrer">
+                [{{ source.position }}] {{ source.title }}
+              </a>
+              <p v-if="source.snippet" class="message-source-snippet">{{ source.snippet }}</p>
+            </li>
+          </ol>
+        </div>
       </article>
     </div>
   </section>

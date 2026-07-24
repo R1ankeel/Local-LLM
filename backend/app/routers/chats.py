@@ -17,6 +17,8 @@ from app.models.chat import (
     Message,
     MessageRead,
 )
+from app.models.web_search import MessageSourceRead
+from app.services.web_search import collect_message_sources
 from app.services.behavior_profiles import ensure_default_profile
 
 
@@ -71,8 +73,19 @@ def _messages_for_chat(db: Session, chat_id: int) -> list[MessageRead]:
         .where(Message.chat_id == chat_id)
         .order_by(Message.created_at, Message.id)
     ).all()
+    sources_by_message_id = collect_message_sources(
+        db,
+        [message.id for message in messages if message.id is not None],
+    )
     return [
-        MessageRead.model_validate(message)
+        MessageRead.model_validate(message).model_copy(
+            update={
+                "sources": [
+                    MessageSourceRead.model_validate(source)
+                    for source in sources_by_message_id.get(message.id or -1, [])
+                ],
+            }
+        )
         for message in messages
         if message.role in {"user", "assistant"}
     ]

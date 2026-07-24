@@ -33,6 +33,10 @@ class OllamaStreamEndedWithoutDoneError(Exception):
     pass
 
 
+class OllamaStreamTruncatedError(Exception):
+    pass
+
+
 class OllamaClient:
     def __init__(self, base_url: str, default_model: str) -> None:
         self.base_url = base_url.rstrip("/")
@@ -190,6 +194,7 @@ class OllamaClient:
 
     async def iter_content(self, response: httpx.Response) -> AsyncIterator[str]:
         seen_done = False
+        done_reason = None
         async for line in response.aiter_lines():
             if not line:
                 continue
@@ -205,7 +210,11 @@ class OllamaClient:
 
             if payload.get("done"):
                 seen_done = True
+                done_reason = payload.get("done_reason")
                 break
 
         if not seen_done:
             raise OllamaStreamEndedWithoutDoneError("Ollama stream ended before done=true.")
+
+        if done_reason == "length":
+            raise OllamaStreamTruncatedError("Ollama достигла лимита генерации.")

@@ -71,8 +71,10 @@ class FakeOllamaClient:
 
     async def iter_content(self, response: FakeResponse):
         from app.clients.ollama import OllamaStreamEndedWithoutDoneError
+        from app.clients.ollama import OllamaStreamTruncatedError
 
         seen_done = False
+        done_reason = None
         async for line in response.aiter_lines():
             if not line:
                 continue
@@ -82,9 +84,12 @@ class FakeOllamaClient:
                 yield content
             if payload.get("done"):
                 seen_done = True
+                done_reason = payload.get("done_reason")
                 break
         if not seen_done:
             raise OllamaStreamEndedWithoutDoneError("Ollama stream ended before done=true.")
+        if done_reason == "length":
+            raise OllamaStreamTruncatedError("Ollama reached the generation limit.")
 
 
 class BackendHarness:
@@ -97,6 +102,7 @@ class BackendHarness:
         self.profiles = None
         self.chats = None
         self.chat_route = None
+        self.web_search = None
         self.behavior = None
         self.chat_models = None
         self.memory = None
@@ -119,11 +125,22 @@ class BackendHarness:
         if str(BACKEND_DIR) not in sys.path:
             sys.path.insert(0, str(BACKEND_DIR))
 
+        for module_name in list(sys.modules):
+            if module_name == "app" or module_name.startswith("app."):
+                del sys.modules[module_name]
+
+        from sqlmodel import SQLModel
+
+        SQLModel.metadata.clear()
+
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         os.environ["DATABASE_PATH"] = str(self.db_path)
         os.environ["SERVE_FRONTEND"] = "false"
         os.environ["OLLAMA_BASE_URL"] = "http://127.0.0.1:11434"
         os.environ["OLLAMA_DEFAULT_MODEL"] = "test-model"
+        os.environ["WEB_SEARCH_PROVIDER"] = "duckduckgo"
+        os.environ["XAI_API_KEY"] = ""
+        os.environ["XAI_MODEL"] = "test-xai-model"
 
         self.main = importlib.import_module("app.main")
         self.main.OllamaClient = FakeOllamaClient
@@ -132,6 +149,7 @@ class BackendHarness:
         self.profiles = importlib.import_module("app.routers.profiles")
         self.chats = importlib.import_module("app.routers.chats")
         self.chat_route = importlib.import_module("app.routers.chat")
+        self.web_search = importlib.import_module("app.services.web_search")
         self.behavior = importlib.import_module("app.models.behavior_profile")
         self.chat_models = importlib.import_module("app.models.chat")
         self.memory = importlib.import_module("app.models.memory")
@@ -149,7 +167,12 @@ class BackendHarness:
         with Session(self.db.engine) as db:
             user = self.auth.create_user(db, username, password)
             db.refresh(user)
-            return SimpleNamespace(id=user.id, username=user.username)
+            return SimpleNamespace(
+                id=user.id,
+                username=user.username,
+                web_search_mode=user.web_search_mode,
+                web_search_provider=user.web_search_provider,
+            )
 
     def login(self, username: str, password: str) -> None:
         assert self.client is not None
@@ -236,9 +259,26 @@ class BackendHarness:
 
         return FakeRequest(self.main.app)
 
-    async def run_chat(self, user_id: int, chat_id: int, content: str, disconnect_after: int | None = None):
+    async def run_chat(
+        self,
+        user_id: int,
+        chat_id: int,
+        content: str,
+        disconnect_after: int | None = None,
+        use_web_search: bool = False,
+        web_search_mode: str | None = None,
+    ):
         request = self.make_fake_request(disconnect_after=disconnect_after)
-        payload = self.chat_models.ChatTurnRequest(chat_id=chat_id, content=content, mode="instant")
+        payload_kwargs = {
+            "chat_id": chat_id,
+            "content": content,
+            "mode": "instant",
+            "use_web_search": use_web_search,
+        }
+        if web_search_mode is not None:
+            payload_kwargs["web_search_mode"] = web_search_mode
+
+        payload = self.chat_models.ChatTurnRequest(**payload_kwargs)
         with Session(self.db.engine) as db:
             current_user = db.get(self.auth.User, user_id)
             response = await self.chat_route.chat(

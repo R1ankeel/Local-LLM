@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Boolean, Column, DateTime, String
@@ -16,6 +17,30 @@ class MemoryItem(SQLModel, table=True):
     user_id: int = SQLField(foreign_key="users.id", index=True, nullable=False)
     content: str = SQLField(sa_column=Column(String(500), nullable=False))
     is_active: bool = SQLField(default=True, sa_column=Column(Boolean, nullable=False, index=True))
+    created_at: datetime = SQLField(
+        sa_column=Column(DateTime(timezone=False), nullable=False, index=True),
+        default_factory=utc_now,
+    )
+    updated_at: datetime = SQLField(
+        sa_column=Column(DateTime(timezone=False), nullable=False, index=True),
+        default_factory=utc_now,
+    )
+
+
+MemoryCandidateStatus = Literal["pending", "accepted", "rejected"]
+
+
+class MemoryCandidate(SQLModel, table=True):
+    __tablename__ = "memory_candidates"
+
+    id: int | None = SQLField(default=None, primary_key=True)
+    user_id: int = SQLField(foreign_key="users.id", index=True, nullable=False)
+    chat_id: int = SQLField(foreign_key="chats.id", index=True, nullable=False)
+    content: str = SQLField(sa_column=Column(String(500), nullable=False))
+    status: MemoryCandidateStatus = SQLField(
+        default="pending",
+        sa_column=Column(String(16), nullable=False, index=True),
+    )
     created_at: datetime = SQLField(
         sa_column=Column(DateTime(timezone=False), nullable=False, index=True),
         default_factory=utc_now,
@@ -60,5 +85,23 @@ class MemoryRead(BaseModel):
     user_id: int
     content: str
     is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class MemoryCandidateReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["accepted", "rejected"]
+
+
+class MemoryCandidateRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    chat_id: int
+    content: str
+    status: MemoryCandidateStatus
     created_at: datetime
     updated_at: datetime

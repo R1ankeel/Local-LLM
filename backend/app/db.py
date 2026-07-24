@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
-from sqlalchemy import inspect, text
+from sqlalchemy import event, inspect, text
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.core.config import DATABASE_PATH
 from app.core.time import utc_now
 from app.models.behavior_profile import BehaviorProfile
 from app.models.chat import Chat
-from app.models.memory import MemoryItem
+from app.models.memory import MemoryCandidate, MemoryItem
+from app.models.web_search import MessageSource
 from app.services.behavior_profiles import ensure_default_profile
 
 
@@ -18,6 +19,13 @@ engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False},
 )
+
+
+@event.listens_for(engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):  # noqa: ARG001
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 
 def _ensure_sqlite_indexes() -> None:
@@ -45,6 +53,18 @@ def _ensure_sqlite_indexes() -> None:
         )
         connection.execute(
             text("CREATE INDEX IF NOT EXISTS ix_memory_items_updated_at ON memory_items (updated_at)")
+        )
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_memory_candidates_user_id ON memory_candidates (user_id)")
+        )
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_memory_candidates_chat_id ON memory_candidates (chat_id)")
+        )
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_memory_candidates_status ON memory_candidates (status)")
+        )
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_memory_candidates_updated_at ON memory_candidates (updated_at)")
         )
 
 
@@ -98,6 +118,47 @@ def _ensure_chat_summary_columns() -> None:
             connection.execute(
                 text("ALTER TABLE chats ADD COLUMN summary_updated_at DATETIME")
             )
+
+
+def _ensure_user_web_search_mode_column() -> None:
+    with engine.begin() as connection:
+        inspector = inspect(connection)
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "web_search_mode" not in user_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN web_search_mode TEXT "
+                    "NOT NULL DEFAULT 'off'"
+                )
+            )
+        connection.execute(
+            text(
+                "UPDATE users "
+                "SET web_search_mode = 'off' "
+                "WHERE web_search_mode IS NULL OR web_search_mode = ''"
+            )
+        )
+
+
+def _ensure_user_web_search_provider_column() -> None:
+    with engine.begin() as connection:
+        inspector = inspect(connection)
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "web_search_provider" not in user_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN web_search_provider TEXT "
+                    "NOT NULL DEFAULT 'duckduckgo'"
+                )
+            )
+        connection.execute(
+            text(
+                "UPDATE users "
+                "SET web_search_provider = 'duckduckgo' "
+                "WHERE web_search_provider IS NULL OR web_search_provider = '' "
+                "OR web_search_provider NOT IN ('duckduckgo', 'xai')"
+            )
+        )
 
 
 def _ensure_message_is_complete_column() -> None:
@@ -157,16 +218,39 @@ def _prune_orphan_memory_items() -> None:
             session.commit()
 
 
+def _prune_orphan_memory_candidates() -> None:
+    with Session(engine) as session:
+        candidates = session.exec(select(MemoryCandidate)).all()
+        changed = False
+        for candidate in candidates:
+            user_exists = session.exec(
+                text("SELECT 1 FROM users WHERE id = :user_id"),
+                params={"user_id": candidate.user_id},
+            ).first()
+            chat_exists = session.exec(
+                text("SELECT 1 FROM chats WHERE id = :chat_id AND user_id = :user_id"),
+                params={"chat_id": candidate.chat_id, "user_id": candidate.user_id},
+            ).first()
+            if user_exists is None or chat_exists is None:
+                session.delete(candidate)
+                changed = True
+        if changed:
+            session.commit()
+
+
 def init_db() -> None:
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
     SQLModel.metadata.create_all(engine)
     _ensure_chat_profile_column()
     _ensure_chat_context_message_limit_column()
     _ensure_chat_summary_columns()
+    _ensure_user_web_search_mode_column()
+    _ensure_user_web_search_provider_column()
     _ensure_message_is_complete_column()
     _ensure_sqlite_indexes()
     _backfill_behavior_profiles()
     _prune_orphan_memory_items()
+    _prune_orphan_memory_candidates()
 
 
 def get_db() -> Generator[Session, None, None]:

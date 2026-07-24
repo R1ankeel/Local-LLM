@@ -1,5 +1,5 @@
-﻿import { computed, ref } from 'vue'
-import { getJson, postJson } from '../api/http.js'
+import { computed, ref } from 'vue'
+import { getJson, patchJson, postJson } from '../api/http.js'
 import { toUserErrorMessage } from '../utils/errors.js'
 
 const currentUser = ref(null)
@@ -82,6 +82,30 @@ export function useAuth() {
     }
   }
 
+  async function updateWebSearchMode(webSearchMode) {
+    if (!currentUser.value) {
+      return null
+    }
+
+    const updatedUser = await patchJson('/auth/me', {
+      web_search_mode: webSearchMode,
+    })
+    currentUser.value = updatedUser
+    return updatedUser
+  }
+
+  async function updateWebSearchProvider(webSearchProvider) {
+    if (!currentUser.value) {
+      return null
+    }
+
+    const updatedUser = await patchJson('/auth/me', {
+      web_search_provider: webSearchProvider,
+    })
+    currentUser.value = updatedUser
+    return updatedUser
+  }
+
   return {
     currentUser,
     error,
@@ -91,6 +115,8 @@ export function useAuth() {
     login,
     loadCurrentUser,
     logout,
+    updateWebSearchMode,
+    updateWebSearchProvider,
     status,
   }
 }
